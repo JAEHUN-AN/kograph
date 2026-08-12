@@ -6,8 +6,10 @@
 API docs: https://opendart.fss.or.kr/guide/main.do
 """
 
+import html
 import io
 import logging
+import re
 import zipfile
 from collections.abc import Iterator
 from datetime import date
@@ -142,3 +144,55 @@ class DartClient:
             if page >= int(body.get("total_page", 1)):
                 return
             page += 1
+
+    def document_text(self, rcept_no: str) -> str:
+        """공시 원문 텍스트. zip 안의 본문 XML에서 태그를 제거해 반환.
+
+        오류 응답은 zip이 아니라 XML/JSON으로 오므로 BadZipFile로 감지한다.
+        """
+        resp = self._get("document.xml", rcept_no=rcept_no)
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(resp.content))
+        except zipfile.BadZipFile:
+            snippet = resp.content[:300].decode("utf-8", errors="replace")
+            raise DartApiError("bad-zip", f"non-zip response for {rcept_no}: {snippet}") from None
+
+        with zf:
+            names = zf.namelist()
+            if not names:
+                return ""
+            # 본문은 통상 {rcept_no}.xml, 없으면 가장 큰 파일
+            main = next(
+                (n for n in names if n.startswith(rcept_no)),
+                max(names, key=lambda n: zf.getinfo(n).file_size),
+            )
+            raw = zf.read(main)
+        return _strip_markup(_decode_kr(raw))
+
+
+def _decode_kr(raw: bytes) -> str:
+    """DART 문서는 utf-8/euc-kr이 혼재한다."""
+    for enc in ("utf-8", "cp949"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+_BLOCK_RE = re.compile(r"<(style|script|head)[^>]*>.*?</\1\s*>", re.IGNORECASE | re.DOTALL)
+_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"[ \t　]+")
+_NL_RE = re.compile(r"\n{3,}")
+
+
+def _strip_markup(text: str) -> str:
+    """XML/HTML 태그 제거 후 공백 정규화. (DART 본문은 well-formed가 아닐 수 있어 정규식 사용)"""
+    text = _BLOCK_RE.sub(" ", text)  # CSS/JS 블록은 내용째 제거
+    text = _COMMENT_RE.sub(" ", text)
+    text = _TAG_RE.sub("\n", text)
+    text = html.unescape(text)
+    text = _WS_RE.sub(" ", text)
+    text = _NL_RE.sub("\n\n", text)
+    return "\n".join(line.strip() for line in text.splitlines() if line.strip())

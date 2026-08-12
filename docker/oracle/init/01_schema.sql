@@ -28,6 +28,7 @@ CREATE TABLE filing (
     rm           VARCHAR2(50),             -- 비고 (유/코 등)
     raw_json     CLOB,                     -- 응답 원문 (재처리용)
     doc_text     CLOB,                     -- 본문 텍스트 (Week 2에서 적재)
+    doc_fetched_at TIMESTAMP,              -- 본문 수집 시도 시각 (NULL=미시도)
     loaded_at    TIMESTAMP     DEFAULT SYSTIMESTAMP NOT NULL,
     CONSTRAINT pk_filing PRIMARY KEY (rcept_no),
     CONSTRAINT fk_filing_corp FOREIGN KEY (corp_code) REFERENCES corp (corp_code)
@@ -50,6 +51,21 @@ CREATE TABLE price_daily (
     CONSTRAINT pk_price_daily PRIMARY KEY (stock_code, trade_date)
 );
 CREATE INDEX ix_price_date ON price_daily (trade_date);
+
+-- LLM 관계 추출 결과 스테이징 (Neo4j 적재 전 원본 보존·리니지)
+CREATE TABLE kg_triple (
+    triple_id    NUMBER GENERATED ALWAYS AS IDENTITY,
+    rcept_no     CHAR(14)      NOT NULL,   -- 근거 공시
+    subject_name VARCHAR2(200) NOT NULL,
+    predicate    VARCHAR2(50)  NOT NULL,   -- SUPPLIES_TO | OWNS_STAKE | ...
+    object_name  VARCHAR2(200) NOT NULL,
+    props_json   CLOB,                     -- 계약금액·지분율 등 속성
+    model        VARCHAR2(50),             -- 추출에 쓴 LLM
+    extracted_at TIMESTAMP     DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_kg_triple PRIMARY KEY (triple_id),
+    CONSTRAINT fk_triple_filing FOREIGN KEY (rcept_no) REFERENCES filing (rcept_no)
+);
+CREATE INDEX ix_triple_rcept ON kg_triple (rcept_no);
 
 -- ETL 실행 이력 (증분 수집 워터마크)
 CREATE TABLE etl_run (
