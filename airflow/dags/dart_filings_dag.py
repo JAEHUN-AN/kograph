@@ -47,9 +47,16 @@ def dart_filings():
 
     @task
     def ingest_filings() -> int:
+        # DART 정책: corp_code 미지정 조회는 검색기간 3개월 제한.
+        # -> 유니버스 종목별 corp_code 지정 조회 (기간 무제한, 트래픽도 적음)
         from kograph.collectors.dart import DartClient
         from kograph.config import get_settings
-        from kograph.db.oracle import latest_watermark, record_etl_run, upsert_filings
+        from kograph.db.oracle import (
+            corp_codes_for_stocks,
+            latest_watermark,
+            record_etl_run,
+            upsert_filings,
+        )
 
         wm = latest_watermark(JOB_NAME)
         begin = (
@@ -62,17 +69,23 @@ def dart_filings():
             logger.info("nothing to ingest (watermark up to date)")
             return 0
 
-        universe = set(_load_universe())
+        universe = _load_universe()
+        mapping = corp_codes_for_stocks(universe)
+        missing = sorted(set(universe) - set(mapping))
+        if missing:
+            # corp 마스터에 없는 종목은 건너뛰되 반드시 드러낸다
+            logger.warning("no corp_code for %d tickers: %s", len(missing), missing)
+
         client = DartClient(get_settings().dart_api_key)
         total = 0
         try:
-            for pblntf_ty in TARGET_TYPES:
-                batch = [
-                    f
-                    for f in client.filings(begin, end, pblntf_ty=pblntf_ty)
-                    if f.stock_code in universe
-                ]
-                total += upsert_filings(batch)
+            for stock_code, corp_code in mapping.items():
+                for pblntf_ty in TARGET_TYPES:
+                    batch = list(
+                        client.filings(begin, end, corp_code=corp_code, pblntf_ty=pblntf_ty)
+                    )
+                    total += upsert_filings(batch)
+                logger.info("ingested %s (corp_code=%s)", stock_code, corp_code)
             record_etl_run(JOB_NAME, "SUCCESS", total, end.strftime("%Y%m%d"))
         except Exception as exc:
             record_etl_run(JOB_NAME, "FAILED", total, None, error_msg=str(exc)[:4000])

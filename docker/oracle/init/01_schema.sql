@@ -1,5 +1,8 @@
 -- kograph raw-layer schema (Oracle 23ai Free / FREEPDB1, APP_USER=kograph)
--- gvenzl 이미지가 APP_USER 세션으로 이 스크립트를 실행한다.
+-- gvenzl 이미지는 init 스크립트를 SYSDBA로 CDB 루트에서 실행하므로
+-- 반드시 PDB와 스키마를 먼저 전환해야 한다.
+ALTER SESSION SET CONTAINER = FREEPDB1;
+ALTER SESSION SET CURRENT_SCHEMA = KOGRAPH;
 
 -- 기업 마스터 (DART corpCode.xml 기반)
 CREATE TABLE corp (

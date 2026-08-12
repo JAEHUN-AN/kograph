@@ -6,6 +6,7 @@ pykrx는 KRX 웹을 스크래핑하므로 과도한 호출을 피하고(스로�
 """
 
 import logging
+import math
 import time
 from datetime import date
 
@@ -53,6 +54,19 @@ def fetch_ohlcv(stock_code: str, begin: date, end: date) -> list[DailyPrice]:
     return normalize_ohlcv(stock_code, df)
 
 
+def _opt_float(v) -> float | None:
+    """NaN/None -> None (Oracle은 NaN 바인딩을 거부한다)."""
+    if v is None:
+        return None
+    f = float(v)
+    return None if math.isnan(f) else f
+
+
+def _opt_int(v) -> int | None:
+    f = _opt_float(v)
+    return None if f is None else int(f)
+
+
 def normalize_ohlcv(stock_code: str, df) -> list[DailyPrice]:
     """pykrx DataFrame -> 검증된 DailyPrice 목록. (순수 함수: 단위 테스트 대상)"""
     rows: list[DailyPrice] = []
@@ -67,8 +81,9 @@ def normalize_ohlcv(stock_code: str, df) -> list[DailyPrice]:
                 low_price=int(row["low_price"]),
                 close_price=int(row["close_price"]),
                 volume=int(row["volume"]),
-                trade_value=int(row["trade_value"]) if "trade_value" in row else None,
-                change_rate=float(row["change_rate"]) if "change_rate" in row else None,
+                trade_value=_opt_int(row.get("trade_value")),
+                # 상장 첫날 등 전일 종가가 없으면 pykrx가 NaN을 반환한다
+                change_rate=_opt_float(row.get("change_rate")),
             )
         )
     return rows

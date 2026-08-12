@@ -24,15 +24,15 @@ FAKE_FILING_ROW = {
 }
 
 
-def _fake_corp_zip() -> bytes:
-    xml = (
-        "<result><list>"
-        "<corp_code>00000001</corp_code>"
-        "<corp_name>테스트반도체</corp_name>"
-        "<stock_code> </stock_code>"
-        "<modify_date>20260801</modify_date>"
-        "</list></result>"
+def _corp_entry(code: str, name: str, modify_date: str = "20260801") -> str:
+    return (
+        f"<list><corp_code>{code}</corp_code><corp_name>{name}</corp_name>"
+        f"<stock_code> </stock_code><modify_date>{modify_date}</modify_date></list>"
     )
+
+
+def _fake_corp_zip(entries: str | None = None) -> bytes:
+    xml = f"<result>{entries or _corp_entry('00000001', '테스트반도체')}</result>"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("CORPCODE.xml", xml)
@@ -56,6 +56,19 @@ class TestDartClient:
         assert len(corps) == 1
         assert corps[0].corp_code == "00000001"
         assert corps[0].stock_code is None  # 공백 -> None
+
+    @responses.activate
+    def test_corp_codes_dedupes_by_code_keeping_last(self):
+        """corpCode.xml 중복 corp_code → 마지막(최신) 항목만 남긴다 (ORA-00001 회귀 방지)."""
+        entries = _corp_entry("00000001", "옛이름", "20250101") + _corp_entry(
+            "00000001", "새이름", "20260801"
+        )
+        responses.get(f"{BASE_URL}/corpCode.xml", body=_fake_corp_zip(entries))
+
+        corps = DartClient("fake-key").corp_codes()
+
+        assert len(corps) == 1
+        assert corps[0].corp_name == "새이름"
 
     @responses.activate
     def test_filings_paginates(self):
@@ -115,6 +128,22 @@ class TestNormalizeOhlcv:
                 volume=1000, trade_value=105000, change_rate=1.5,
             )
         ]
+
+    def test_nan_change_rate_becomes_none(self):
+        """상장 첫날 등락률 NaN -> None (Oracle NaN 바인딩 거부 회귀 방지)."""
+        pd = pytest.importorskip("pandas")
+        df = pd.DataFrame(
+            {
+                "시가": [100], "고가": [110], "저가": [90], "종가": [105],
+                "거래량": [1000], "거래대금": [float("nan")], "등락률": [float("nan")],
+            },
+            index=pd.to_datetime(["2026-08-01"]),
+        )
+
+        rows = normalize_ohlcv("000001", df)
+
+        assert rows[0].change_rate is None
+        assert rows[0].trade_value is None
 
     def test_empty_dataframe(self):
         pd = pytest.importorskip("pandas")

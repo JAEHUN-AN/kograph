@@ -45,7 +45,7 @@ uv sync --extra dev           # 또는: pip install -e ".[dev]"
 pytest                        # 단위 테스트
 ```
 
-Airflow UI: http://localhost:8080 (admin/admin) — `dart_filings`, `krx_prices` DAG 활성화.
+Airflow UI: http://localhost:8081 (admin/admin) — `dart_filings`, `krx_prices` DAG 활성화.
 
 ## Stack
 

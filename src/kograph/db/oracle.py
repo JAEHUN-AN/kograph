@@ -90,6 +90,19 @@ def upsert_prices(prices: list[DailyPrice]) -> int:
     return len(rows)
 
 
+def corp_codes_for_stocks(stock_codes: list[str]) -> dict[str, str]:
+    """상장 종목코드 -> DART corp_code 매핑. corp 마스터 선행 적재가 전제."""
+    if not stock_codes:
+        return {}
+    with connect() as conn, conn.cursor() as cur:
+        placeholders = ",".join(f":{i}" for i in range(1, len(stock_codes) + 1))
+        cur.execute(
+            f"SELECT stock_code, corp_code FROM corp WHERE stock_code IN ({placeholders})",
+            stock_codes,
+        )
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
 def record_etl_run(
     job_name: str, status: str, row_count: int, watermark: str | None, error_msg: str | None = None
 ) -> None:

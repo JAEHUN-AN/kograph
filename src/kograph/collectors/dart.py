@@ -14,7 +14,7 @@ from datetime import date
 from xml.etree import ElementTree
 
 import requests
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,9 @@ class CorpInfo(BaseModel):
 
 
 class Filing(BaseModel):
+    # DART 응답은 필드 뒤에 공백 패딩이 붙는 경우가 있다 -> 전 필드 strip
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     rcept_no: str = Field(min_length=14, max_length=14)
     corp_code: str
     corp_name: str
@@ -89,16 +92,20 @@ class DartClient:
         with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
             xml_bytes = zf.read(zf.namelist()[0])
         root = ElementTree.fromstring(xml_bytes)
-        corps = [
-            CorpInfo(
+        # corpCode.xml에는 동일 corp_code가 중복 수록될 수 있다.
+        # 같은 배치에 중복 키가 있으면 array-DML MERGE가 ORA-00001을 내므로
+        # 여기서 마지막 항목(최신 수정분) 기준으로 dedupe한다.
+        by_code: dict[str, CorpInfo] = {}
+        for el in root.iter("list"):
+            info = CorpInfo(
                 corp_code=el.findtext("corp_code", "").strip(),
                 corp_name=el.findtext("corp_name", "").strip(),
                 stock_code=el.findtext("stock_code"),
                 modify_date=el.findtext("modify_date"),
             )
-            for el in root.iter("list")
-        ]
-        logger.info("corp_codes: %d entries", len(corps))
+            by_code[info.corp_code] = info
+        corps = list(by_code.values())
+        logger.info("corp_codes: %d unique entries", len(corps))
         return corps
 
     def filings(

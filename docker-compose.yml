@@ -56,7 +56,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "8081:8080"   # host 8080은 로컬 Spring Boot API가 사용 중
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -74,11 +74,14 @@ services:
       - ./airflow/logs:/opt/airflow/logs
       - ./src:/opt/kograph/src
       - ./data:/opt/kograph/data
+    # 주의: 스케줄러는 db migrate "이후"에 떠야 한다. `(... &)` 서브셸로
+    # 백그라운드 기동한 뒤 웹서버를 포그라운드 프로세스로 유지.
     command: >-
       bash -c "pip install --no-cache-dir oracledb pykrx tenacity pydantic pydantic-settings requests
       && airflow db migrate
       && (airflow users create --username admin --password admin --firstname a --lastname a --role Admin --email admin@localhost || true)
-      && airflow webserver -p 8080 & airflow scheduler"
+      && (airflow scheduler &)
+      && exec airflow webserver -p 8080"
 
 volumes:
   oracle-data:
