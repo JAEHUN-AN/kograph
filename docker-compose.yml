@@ -1,0 +1,86 @@
+name: kograph
+
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    container_name: kograph-oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_ADMIN_PASSWORD:-admin-change-me}
+      APP_USER: ${ORACLE_USER:-kograph}
+      APP_USER_PASSWORD: ${ORACLE_PASSWORD:-change-me-local-only}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./docker/oracle/init:/container-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
+  neo4j:
+    image: neo4j:5.24-community
+    container_name: kograph-neo4j
+    ports:
+      - "7474:7474"   # browser
+      - "7687:7687"   # bolt
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-change-me-local-only}
+      NEO4J_PLUGINS: '["apoc"]'
+    volumes:
+      - neo4j-data:/data
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: kograph-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kograph}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+      POSTGRES_DB: ${POSTGRES_DB:-kograph}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kograph}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  airflow:
+    image: apache/airflow:2.10.3-python3.12
+    container_name: kograph-airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+        postgresql+psycopg2://${POSTGRES_USER:-kograph}:${POSTGRES_PASSWORD:-change-me-local-only}@postgres:5432/airflow
+      PYTHONPATH: /opt/kograph/src
+      DART_API_KEY: ${DART_API_KEY}
+      ORACLE_HOST: oracle
+      ORACLE_PORT: "1521"
+      ORACLE_SERVICE: FREEPDB1
+      ORACLE_USER: ${ORACLE_USER:-kograph}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-change-me-local-only}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./src:/opt/kograph/src
+      - ./data:/opt/kograph/data
+    command: >-
+      bash -c "pip install --no-cache-dir oracledb pykrx tenacity pydantic pydantic-settings requests
+      && airflow db migrate
+      && (airflow users create --username admin --password admin --firstname a --lastname a --role Admin --email admin@localhost || true)
+      && airflow webserver -p 8080 & airflow scheduler"
+
+volumes:
+  oracle-data:
+  neo4j-data:
+  postgres-data:
