@@ -83,7 +83,67 @@ services:
       && (airflow scheduler &)
       && exec airflow webserver -p 8080"
 
+  kograph-mcp:
+    build: .
+    image: kograph-mcp:dev
+    container_name: kograph-mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      oracle:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      ORACLE_HOST: oracle
+      ORACLE_PORT: "1521"
+      ORACLE_SERVICE: FREEPDB1
+      ORACLE_USER: ${ORACLE_USER:-kograph}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-change-me-local-only}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-kograph}
+      POSTGRES_USER: ${POSTGRES_USER:-kograph}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change-me-local-only}
+      DART_API_KEY: ${DART_API_KEY:-unused-at-serving-time}
+      KOGRAPH_EMBED_BACKEND: onnx-int8
+      KOGRAPH_ONNX_DIR: /models/bge-m3-onnx
+    volumes:
+      # 모델은 이미지에 굽지 않고 읽기 전용으로 마운트한다 (이미지 913MB 유지)
+      - ./models:/models:ro
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: kograph-prometheus
+    depends_on:
+      - kograph-mcp
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    container_name: kograph-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3001:3000"   # host 3000은 로컬의 다른 프로세스가 사용 중
+    environment:
+      # 로컬 개발 전용. 외부에 노출할 때는 반드시 인증을 켠다.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+
 volumes:
   oracle-data:
   neo4j-data:
   postgres-data:
+  prometheus-data:
+  grafana-data:

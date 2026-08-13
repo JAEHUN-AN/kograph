@@ -1,0 +1,28 @@
+# 자격증명 — 이미지 레이어에 한 번 들어가면 지워도 히스토리에 남는다
+.env
+*.pem
+*.key
+
+# 수 GB 모델 산출물 (볼륨으로 마운트)
+models/
+
+# 런타임/개발 산출물
+.venv/
+.git/
+.github/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+htmlcov/
+.coverage
+
+# 이미지에 필요 없는 것들
+tests/
+scripts/
+notes/
+airflow/
+docker/
+data/eval/
+data/raw/
+data/interim/

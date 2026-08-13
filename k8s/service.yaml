@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kograph-mcp
+  labels:
+    app.kubernetes.io/name: kograph-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kograph-mcp
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kograph-models
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      # INT8 모델 544MB + 여유. FP32(2.2GB)를 담지 않아 이 정도면 충분하다.
+      storage: 5Gi

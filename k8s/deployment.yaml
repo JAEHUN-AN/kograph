@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kograph-mcp
+  labels:
+    app.kubernetes.io/name: kograph-mcp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kograph-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kograph-mcp
+      annotations:
+        # Prometheus가 파드를 직접 스크레이프하도록 알린다
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: kograph-mcp
+          image: kograph-mcp:dev
+          imagePullPolicy: IfNotPresent
+          args: ["--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: kograph-config
+            - secretRef:
+                name: kograph-secrets
+          # liveness는 프로세스만 본다. DB까지 검사하면 Oracle이 잠깐 흔들릴 때
+          # 멀쩡한 파드가 재시작된다. 준비 상태는 readiness가 따로 판단한다.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          # 모델 로딩(INT8 544MB)이 느려 startup probe로 여유를 준다.
+          # 이게 없으면 초기 로딩 중에 liveness가 먼저 파드를 죽인다.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              # ONNX INT8 세션 + 토크나이저 기준. torch를 뺀 덕에 이 정도로 잡힌다.
+              cpu: "2"
+              memory: "2Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+            - name: hf-cache
+              mountPath: /home/kograph/.cache/huggingface
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: kograph-models
+        # readOnlyRootFilesystem 이므로 쓰기가 필요한 경로는 별도로 준다
+        - name: tmp
+          emptyDir: {}
+        - name: hf-cache
+          emptyDir: {}

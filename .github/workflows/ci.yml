@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: 린트 + 단위 테스트
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: 의존성 설치
+        # 단위 테스트는 DB도 API 키도 쓰지 않는다. 전부 합성 데이터라
+        # 서비스 컨테이너 없이 돌고, 그래서 CI가 빠르고 안 흔들린다.
+        run: uv sync --frozen --extra dev --extra graph --extra rag --extra mcp
+
+      - name: 린트
+        run: uv run ruff check src/ tests/ scripts/
+
+      - name: 테스트
+        run: uv run pytest -q
+
+  image:
+    name: 서빙 이미지 빌드
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: 빌드
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: kograph-mcp:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 학습 스택 미포함 확인
+        # Dockerfile 안에도 가드가 있지만 이미지 밖에서 한 번 더 못 박는다.
+        # 서빙에 torch가 섞이면 이미지가 GB 단위로 부푼다 (notes/004).
+        run: |
+          if docker run --rm --entrypoint python kograph-mcp:ci \
+               -c "import torch" 2>/dev/null; then
+            echo "ERROR: torch가 서빙 이미지에 포함되었습니다"
+            exit 1
+          fi
+          echo "OK: torch 미포함"
+
+      - name: 이미지 크기 확인
+        run: |
+          BYTES=$(docker image inspect kograph-mcp:ci --format '{{.Size}}')
+          MB=$((BYTES / 1024 / 1024))
+          echo "이미지 크기: ${MB}MB"
+          # 1.5GB를 넘으면 의존성이 새어 들어온 것이다
+          if [ "$MB" -gt 1500 ]; then
+            echo "ERROR: 이미지가 예상보다 큽니다 (${MB}MB > 1500MB)"
+            exit 1
+          fi
+
+      - name: 헬스체크 + 메트릭 노출 확인
+        run: |
+          docker run -d --name kograph-ci -p 8000:8000 kograph-mcp:ci
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8000/healthz >/dev/null; then
+              echo "OK: /healthz 응답"
+              curl -s http://localhost:8000/metrics | grep -q 'kograph_' \
+                && echo "OK: /metrics 노출"
+              docker rm -f kograph-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "ERROR: 서버가 뜨지 않았습니다"
+          docker logs kograph-ci
+          docker rm -f kograph-ci
+          exit 1

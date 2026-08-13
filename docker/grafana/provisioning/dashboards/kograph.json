@@ -1,0 +1,104 @@
+{
+  "uid": "kograph-serving",
+  "title": "kograph — MCP 서빙",
+  "tags": ["kograph"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "도구 호출률 (req/s)",
+      "description": "어떤 도구가 실제로 쓰이는지. 특정 도구만 몰리면 설명 문구를 손볼 신호다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (tool) (rate(kograph_tool_calls_total[5m]))",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "도구 오류율 (err/s)",
+      "description": "0이 아니면 즉시 확인. status 라벨로 정상/오류를 분리해 센다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (tool) (rate(kograph_tool_calls_total{status=\"error\"}[5m]))",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "도구 p95 지연",
+      "description": "평균이 아니라 p95를 본다. 느린 꼬리가 사용자 체감을 결정한다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (tool, le) (rate(kograph_tool_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{tool}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "검색 축별 p95 지연 (vector vs graph)",
+      "description": "두 축은 성능 특성이 다르다. 벡터는 임베딩(약 0.35s)이, 그래프는 순회가 지배한다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (mode, le) (rate(kograph_retrieval_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{mode}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "검색 평균 반환 건수",
+      "description": "0으로 수렴하면 색인이나 그래프가 비었다는 신호. 지연만 보면 이 장애를 놓친다.",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "sum by (mode) (rate(kograph_retrieval_results_sum[5m])) / clamp_min(sum by (mode) (rate(kograph_retrieval_results_count[5m])), 0.001)",
+          "legendFormat": "{{mode}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "임베딩 백엔드",
+      "description": "INT8로 전환됐는지 대시보드에서 바로 확인한다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "name"
+      },
+      "targets": [
+        {
+          "expr": "kograph_embed_backend_info",
+          "legendFormat": "{{backend}}",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

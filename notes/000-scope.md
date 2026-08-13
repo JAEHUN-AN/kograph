@@ -19,7 +19,8 @@
 - [ ] W2: 관계 추출 정밀도 (수동 라벨 200건)
 - [x] W3: 임베딩 처리량 FP32 1.43 → INT8 2.91 chunks/s (2.03x), 가중치 4배 축소, 검색 품질 동일 → [003](003-onnx-int8-quantization.md)
 - [ ] W3: 쿼리당 LLM 비용·p95 지연 before/after (크레딧 확보 후)
-- [ ] W4: 평가 자동화 커버리지, 회귀 감지 사례
+- [x] W4: 서빙 이미지 8.8GB → 913MB, 메트릭 4종 + 대시보드, CI 3중 검증 → [004](004-serving-deployment.md)
+- [ ] W4: 평가셋 회귀를 CI에 추가 (DB 시드 필요)
 
 ## 노트 목록
 
@@ -27,5 +28,6 @@
 - [001](001-rule-vs-llm-extraction.md): 관계 추출 — LLM 대신 규칙 파서를 택한 이유와 실측
 - [002](002-graphrag-vs-vector-eval.md): GraphRAG vs vanilla RAG 검색 성능 실측
 - [003](003-onnx-int8-quantization.md): 임베딩 ONNX INT8 양자화 — CPU 처리량 2배, 품질 손실 0
-- 004: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
+- [004](004-serving-deployment.md): 서빙 배포와 관측 — 이미지 8.8GB → 913MB
+- 005: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
 - ...

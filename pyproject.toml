@@ -28,7 +28,22 @@ onnx = [
     "onnxruntime>=1.19",              # CPU 추론 백엔드
     "optimum[onnxruntime]>=1.23",     # ONNX 변환 + 동적 양자화
 ]
-mcp = ["mcp>=1.1"]
+# 서빙 전용 — torch/sentence-transformers를 뺀다.
+# OnnxEmbedder는 onnxruntime + 토크나이저만 쓰므로 학습 스택이 필요 없고,
+# 그 차이가 이미지 크기에서 GB 단위로 나타난다 (notes/004).
+serve = [
+    "onnxruntime>=1.19",
+    "transformers>=4.40",             # 토크나이저만 사용
+    "neo4j>=5.23",
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
+    "mcp>=1.1",
+    "prometheus-client>=0.21",
+]
+mcp = [
+    "mcp>=1.1",
+    "prometheus-client>=0.21",  # /metrics 노출 (HTTP 전송 시)
+]
 dev = ["pytest>=8.3", "pytest-cov>=5.0", "ruff>=0.6", "responses>=0.25"]
 
 [build-system]

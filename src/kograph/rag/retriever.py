@@ -15,11 +15,13 @@ import argparse
 import logging
 import re
 import sys
+import time
 from dataclasses import dataclass, field
 
 from neo4j import GraphDatabase
 
 from kograph.config import get_settings
+from kograph.observability import observe_retrieval
 from kograph.rag.embed import connect_pg, embed_texts
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,13 @@ class Evidence:
 
 def vector_search(question: str, k: int = DEFAULT_K) -> list[Evidence]:
     """pgvector 코사인 최근접. 임베딩은 적재 때와 동일 모델·정규화를 쓴다."""
+    started = time.perf_counter()
+    results = _vector_search(question, k)
+    observe_retrieval("vector", time.perf_counter() - started, len(results))
+    return results
+
+
+def _vector_search(question: str, k: int) -> list[Evidence]:
     qvec = embed_texts([question])[0]
     with connect_pg() as pg, pg.cursor() as cur:
         cur.execute(
@@ -111,7 +120,7 @@ def _render_path(names: list[str], rels: list[str], starts: list[str]) -> str:
 
     순회는 무방향(-[r]-)이라 경로상의 다음 노드가 엣지의 끝점이 아닐 수 있다.
     그때 화살표를 그대로 오른쪽으로 그리면 사실이 뒤집힌다
-    ('SK하이닉스 -[OFFICER_OF]-> 최태원'). 엣지의 실제 시작 노드와 대조해
+    ('테스트하이닉스 -[OFFICER_OF]-> 홍길동'). 엣지의 실제 시작 노드와 대조해
     역방향이면 왼쪽 화살표로 표기한다.
     """
     text = names[0]
@@ -128,6 +137,13 @@ def graph_search(question: str, hops: int = MAX_HOPS, limit: int = 60) -> list[E
     조회하면 Neo4j가 임의 순서로 돌려주므로, 허브 노드(2홉 경로 700개 이상)에서
     정작 필요한 1홉 이웃이 상한 밖으로 밀려난다.
     """
+    started = time.perf_counter()
+    results = _graph_search(question, hops, limit)
+    observe_retrieval("graph", time.perf_counter() - started, len(results))
+    return results
+
+
+def _graph_search(question: str, hops: int, limit: int) -> list[Evidence]:
     seeds = mentioned_companies(question)
     if not seeds:
         return []

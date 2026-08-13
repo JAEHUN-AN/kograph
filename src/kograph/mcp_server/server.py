@@ -12,14 +12,19 @@
    컨텍스트만 먹고 가독성이 낮다.
 """
 
+import argparse
 import csv
 import logging
+import os
 from datetime import date
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from kograph.db.oracle import connect as oracle_connect
+from kograph.observability import metrics_payload, set_embed_backend, track_tool
 from kograph.rag.retriever import graph_search, known_companies, vector_search
 
 logger = logging.getLogger(__name__)
@@ -57,12 +62,13 @@ def list_companies() -> str:
     다른 도구를 호출하기 전에 **어떤 회사를 조회할 수 있는지 모를 때** 먼저
     호출한다. 사용자가 이 목록 밖의 회사를 물으면 데이터 범위 밖임을 알려야 한다.
     """
-    rows = _universe_rows()
-    if not rows:
-        return f"유니버스 파일을 찾을 수 없습니다: {UNIVERSE_CSV}"
-    lines = [f"분석 대상 {len(rows)}개 종목:"]
-    lines += [f"  {r['stock_code']}  {r['corp_name']} ({r['sector']})" for r in rows]
-    return "\n".join(lines)
+    with track_tool("list_companies"):
+        rows = _universe_rows()
+        if not rows:
+            return f"유니버스 파일을 찾을 수 없습니다: {UNIVERSE_CSV}"
+        lines = [f"분석 대상 {len(rows)}개 종목:"]
+        lines += [f"  {r['stock_code']}  {r['corp_name']} ({r['sector']})" for r in rows]
+        return "\n".join(lines)
 
 
 @mcp.tool()
@@ -77,18 +83,19 @@ def get_company_relations(company: str, hops: int = 1) -> str:
     hops=1은 직접 관계, hops=2는 "공급사의 다른 고객"처럼 한 다리 건넌
     관계까지 포함한다. 먼저 1로 시도하고 부족할 때 2로 넓힌다.
     """
-    hops = max(1, min(int(hops), 2))
-    evidences = graph_search(company, hops=hops)
-    if not evidences:
-        return (
-            f"'{company}'의 관계를 찾지 못했습니다. "
-            "list_companies로 조회 가능한 회사명을 확인하세요."
-        )
-    lines = [f"'{company}' 관련 관계 {len(evidences)}건 (hops={hops}):"]
-    for ev in evidences:
-        cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
-        lines.append(f"  {ev.text}{cite}")
-    return "\n".join(lines)
+    with track_tool("get_company_relations"):
+        hops = max(1, min(int(hops), 2))
+        evidences = graph_search(company, hops=hops)
+        if not evidences:
+            return (
+                f"'{company}'의 관계를 찾지 못했습니다. "
+                "list_companies로 조회 가능한 회사명을 확인하세요."
+            )
+        lines = [f"'{company}' 관련 관계 {len(evidences)}건 (hops={hops}):"]
+        for ev in evidences:
+            cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
+            lines.append(f"  {ev.text}{cite}")
+        return "\n".join(lines)
 
 
 def _shared_partners(evidences, a_key: str, b_key: str) -> set[str]:
@@ -116,26 +123,27 @@ def find_connection(company_a: str, company_b: str) -> str:
     엮여 있나" 같은 질문에 호출한다.** 두 회사를 각각 조회해 사용자가 직접
     대조하게 두지 말고, 이 도구로 연결 경로를 확인한다.
     """
-    evidences = graph_search(f"{company_a} {company_b}", hops=2)
-    a_key, b_key = company_a.replace(" ", ""), company_b.replace(" ", "")
-    linked = [
-        ev for ev in evidences
-        if any(a_key in e.replace(" ", "") for e in ev.entities)
-        and any(b_key in e.replace(" ", "") for e in ev.entities)
-    ]
-    if not linked:
-        shared = _shared_partners(evidences, a_key, b_key)
-        if shared:
-            return (
-                f"'{company_a}'와 '{company_b}'의 직접 경로는 없지만 "
-                f"공통 상대가 있습니다: {', '.join(sorted(shared))}"
-            )
-        return f"'{company_a}'와 '{company_b}'를 잇는 경로를 찾지 못했습니다."
-    lines = [f"'{company_a}' - '{company_b}' 연결 {len(linked)}건:"]
-    for ev in linked:
-        cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
-        lines.append(f"  {ev.text}{cite}")
-    return "\n".join(lines)
+    with track_tool("find_connection"):
+        evidences = graph_search(f"{company_a} {company_b}", hops=2)
+        a_key, b_key = company_a.replace(" ", ""), company_b.replace(" ", "")
+        linked = [
+            ev for ev in evidences
+            if any(a_key in e.replace(" ", "") for e in ev.entities)
+            and any(b_key in e.replace(" ", "") for e in ev.entities)
+        ]
+        if not linked:
+            shared = _shared_partners(evidences, a_key, b_key)
+            if shared:
+                return (
+                    f"'{company_a}'와 '{company_b}'의 직접 경로는 없지만 "
+                    f"공통 상대가 있습니다: {', '.join(sorted(shared))}"
+                )
+            return f"'{company_a}'와 '{company_b}'를 잇는 경로를 찾지 못했습니다."
+        lines = [f"'{company_a}' - '{company_b}' 연결 {len(linked)}건:"]
+        for ev in linked:
+            cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
+            lines.append(f"  {ev.text}{cite}")
+        return "\n".join(lines)
 
 
 @mcp.tool()
@@ -146,15 +154,16 @@ def search_filings(query: str, limit: int = 5) -> str:
     금액 산정 근거, 공시에 문장으로 적힌 배경 설명 등. 기업 간 관계 자체를
     묻는 질문이면 get_company_relations가 더 정확하다.
     """
-    limit = max(1, min(int(limit), MAX_LIMIT))
-    evidences = vector_search(query, k=limit)
-    if not evidences:
-        return f"'{query}'에 해당하는 공시 내용을 찾지 못했습니다."
-    lines = [f"'{query}' 관련 공시 {len(evidences)}건:"]
-    for ev in evidences:
-        body = " ".join(ev.text.split())[:400]
-        lines.append(f"\n[공시 {ev.rcept_no}] (유사도 {ev.score:.3f})\n{body}")
-    return "\n".join(lines)
+    with track_tool("search_filings"):
+        limit = max(1, min(int(limit), MAX_LIMIT))
+        evidences = vector_search(query, k=limit)
+        if not evidences:
+            return f"'{query}'에 해당하는 공시 내용을 찾지 못했습니다."
+        lines = [f"'{query}' 관련 공시 {len(evidences)}건:"]
+        for ev in evidences:
+            body = " ".join(ev.text.split())[:400]
+            lines.append(f"\n[공시 {ev.rcept_no}] (유사도 {ev.score:.3f})\n{body}")
+        return "\n".join(lines)
 
 
 def _format_price_row(trade_date, close, volume, change_rate) -> str:
@@ -170,38 +179,39 @@ def get_price_series(stock_code: str, start_date: str, end_date: str) -> str:
     "그 계약 이후 주가가 어땠나" 같은 후속 질문이 나오면 여기서 확인한다.
     기간이 길면 앞뒤 일부만 반환하므로, 특정 구간을 보려면 범위를 좁혀 호출한다.
     """
-    code = stock_code.strip().zfill(6)
-    try:
-        begin, end = date.fromisoformat(start_date), date.fromisoformat(end_date)
-    except ValueError:
-        return "날짜는 YYYY-MM-DD 형식이어야 합니다 (예: 2026-01-31)."
-    if begin > end:
-        return "start_date가 end_date보다 늦습니다."
+    with track_tool("get_price_series"):
+        code = stock_code.strip().zfill(6)
+        try:
+            begin, end = date.fromisoformat(start_date), date.fromisoformat(end_date)
+        except ValueError:
+            return "날짜는 YYYY-MM-DD 형식이어야 합니다 (예: 2026-01-31)."
+        if begin > end:
+            return "start_date가 end_date보다 늦습니다."
 
-    with oracle_connect() as conn, conn.cursor() as cur:
-        cur.execute(
-            """SELECT trade_date, close_price, volume, change_rate
-               FROM price_daily
-               WHERE stock_code = :code AND trade_date BETWEEN :b AND :e
-               ORDER BY trade_date""",
-            code=code, b=begin, e=end,
-        )
-        rows = cur.fetchall()
+        with oracle_connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """SELECT trade_date, close_price, volume, change_rate
+                   FROM price_daily
+                   WHERE stock_code = :code AND trade_date BETWEEN :b AND :e
+                   ORDER BY trade_date""",
+                code=code, b=begin, e=end,
+            )
+            rows = cur.fetchall()
 
-    if not rows:
-        return f"{code}의 {start_date}~{end_date} 시세가 없습니다."
+        if not rows:
+            return f"{code}의 {start_date}~{end_date} 시세가 없습니다."
 
-    first_close, last_close = rows[0][1], rows[-1][1]
-    change = (last_close / first_close - 1) * 100 if first_close else 0.0
-    out = [
-        f"{code} 시세 {len(rows)}거래일 ({rows[0][0]:%Y-%m-%d} ~ {rows[-1][0]:%Y-%m-%d})",
-        f"기간 수익률 {change:+.1f}% ({first_close:,} -> {last_close:,})",
-    ]
-    shown = rows if len(rows) <= MAX_PRICE_ROWS else rows[:10] + rows[-10:]
-    if len(rows) > MAX_PRICE_ROWS:
-        out.append(f"(전체 {len(rows)}행 중 앞뒤 10행만 표시)")
-    out += [_format_price_row(*r) for r in shown]
-    return "\n".join(out)
+        first_close, last_close = rows[0][1], rows[-1][1]
+        change = (last_close / first_close - 1) * 100 if first_close else 0.0
+        out = [
+            f"{code} 시세 {len(rows)}거래일 ({rows[0][0]:%Y-%m-%d} ~ {rows[-1][0]:%Y-%m-%d})",
+            f"기간 수익률 {change:+.1f}% ({first_close:,} -> {last_close:,})",
+        ]
+        shown = rows if len(rows) <= MAX_PRICE_ROWS else rows[:10] + rows[-10:]
+        if len(rows) > MAX_PRICE_ROWS:
+            out.append(f"(전체 {len(rows)}행 중 앞뒤 10행만 표시)")
+        out += [_format_price_row(*r) for r in shown]
+        return "\n".join(out)
 
 
 @mcp.tool()
@@ -211,24 +221,58 @@ def graph_overview() -> str:
     **"무엇을 물어볼 수 있나", "데이터에 뭐가 있나" 같은 탐색적 질문이나,
     다른 도구가 빈 결과를 돌려줘 범위를 확인해야 할 때 호출한다.**
     """
-    names = known_companies()
-    # 예시는 분석 대상 종목에서 뽑는다. 전체를 사전순으로 자르면 공시에 등장한
-    # 가칭 법인('(가칭) pCAM JV')이 앞을 채워 그래프를 오해하게 만든다.
-    seeds = _universe_names()
-    examples = [n for n in seeds if n in set(names)] or sorted(names)[:10]
-    return (
-        f"지식그래프: 회사 노드 {len(names)}개.\n"
-        "관계 유형: SUPPLIES_TO(공급), OWNS_STAKE(지분), INVESTS_IN(출자), "
-        "GUARANTEES_DEBT_OF(채무보증), SUBSIDIARY_OF(모자), OFFICER_OF(임원).\n"
-        "출처: DART 주요사항보고서 (반도체·2차전지 밸류체인, 최근 3년).\n"
-        f"분석 대상 종목: {', '.join(examples)}\n"
-        "이 밖에 거래상대·자회사로 등장한 법인이 함께 들어 있다."
-    )
+    with track_tool("graph_overview"):
+        names = known_companies()
+        # 예시는 분석 대상 종목에서 뽑는다. 전체를 사전순으로 자르면 공시에 등장한
+        # 가칭 법인('(가칭) pCAM JV')이 앞을 채워 그래프를 오해하게 만든다.
+        seeds = _universe_names()
+        examples = [n for n in seeds if n in set(names)] or sorted(names)[:10]
+        return (
+            f"지식그래프: 회사 노드 {len(names)}개.\n"
+            "관계 유형: SUPPLIES_TO(공급), OWNS_STAKE(지분), INVESTS_IN(출자), "
+            "GUARANTEES_DEBT_OF(채무보증), SUBSIDIARY_OF(모자), OFFICER_OF(임원).\n"
+            "출처: DART 주요사항보고서 (반도체·2차전지 밸류체인, 최근 3년).\n"
+            f"분석 대상 종목: {', '.join(examples)}\n"
+            "이 밖에 거래상대·자회사로 등장한 법인이 함께 들어 있다."
+        )
+
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(_request: Request) -> JSONResponse:
+    """liveness probe — 의존 서비스는 확인하지 않는다.
+
+    DB까지 검사하면 Oracle이 잠깐 흔들릴 때 쿠버네티스가 멀쩡한 파드를
+    재시작한다. 준비 상태는 readiness로 따로 다뤄야 한다.
+    """
+    return JSONResponse({"status": "ok", "service": "kograph"})
+
+
+@mcp.custom_route("/metrics", methods=["GET"])
+async def metrics(_request: Request) -> Response:
+    body, content_type = metrics_payload()
+    return Response(content=body, media_type=content_type)
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.WARNING)
-    mcp.run(transport="stdio")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    parser = argparse.ArgumentParser(description="kograph MCP server")
+    parser.add_argument("--transport", choices=["stdio", "http"], default="stdio",
+                        help="stdio는 Claude Desktop용, http는 컨테이너 배포용")
+    parser.add_argument("--host", default=os.getenv("KOGRAPH_HOST", "0.0.0.0"))  # noqa: S104
+    parser.add_argument("--port", type=int, default=int(os.getenv("KOGRAPH_PORT", "8000")))
+    args = parser.parse_args()
+
+    set_embed_backend(os.getenv("KOGRAPH_EMBED_BACKEND", "torch"))
+
+    if args.transport == "stdio":
+        mcp.run(transport="stdio")
+        return
+
+    import uvicorn
+
+    app = mcp.streamable_http_app(host=args.host)
+    logger.info("serving MCP on http://%s:%d/mcp (metrics: /metrics)", args.host, args.port)
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":

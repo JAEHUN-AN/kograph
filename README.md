@@ -33,7 +33,7 @@ pykrx (KRX) ──┼─ Airflow ─ Oracle 23ai ──────┤
 - [x] **Week 2 — 지식그래프 + RAG**: 규칙 기반 관계 추출 → Neo4j, 하이브리드 리트리버, 평가셋 30문항
 - [x] **Week 3a — MCP 서버**: 도구 6종, stdio 통합 검증
 - [x] **Week 3b — 임베딩 최적화**: ONNX INT8 양자화, CPU 처리량 2배
-- [ ] **Week 4 — MLOps**: k3s 배포, 회귀평가 CI, Prometheus/Grafana
+- [x] **Week 4 — 서빙·관측**: 컨테이너화, Prometheus/Grafana, k8s 매니페스트, CI
 
 측정 결과와 그 과정에서 잡은 결함은 [notes/](notes/)에 있다.
 
@@ -44,6 +44,7 @@ pykrx (KRX) ──┼─ Airflow ─ Oracle 23ai ──────┤
 | 지식그래프 | 노드 184, 관계 642 |
 | 벡터 인덱스 | 공시 2,178건 → 8,934 청크 (bge-m3, CPU) |
 | 임베딩 처리량 | FP32 1.43 → INT8 2.91 chunks/s, 가중치 2,166 → 544 MB, 검색 품질 동일 ([003](notes/003-onnx-int8-quantization.md)) |
+| 서빙 이미지 | 8.8GB → 913MB (학습 스택 제거) ([004](notes/004-serving-deployment.md)) |
 
 ## MCP 서버
 
@@ -83,6 +84,33 @@ uv run python scripts/verify_mcp.py          # 클라이언트로 왕복 검증
 ```
 
 `docker compose up -d`로 DB가 떠 있어야 한다.
+
+## 배포와 관측
+
+서버를 HTTP로 띄우면 `/healthz`(liveness)와 `/metrics`(Prometheus)가 함께 열린다.
+
+```bash
+docker compose up -d kograph-mcp prometheus grafana
+uv run python scripts/verify_http.py   # 헬스체크·메트릭·카운터 증가 검증
+```
+
+| 주소 | 용도 |
+|---|---|
+| http://localhost:8000/mcp | MCP (streamable-http) |
+| http://localhost:8000/metrics | Prometheus 메트릭 |
+| http://localhost:9090 | Prometheus |
+| http://localhost:3001 | Grafana (대시보드 자동 프로비저닝) |
+
+서빙 이미지는 학습 스택(torch·sentence-transformers)을 뺀 **913MB**다. 추론은
+ONNX INT8로 하므로 PyTorch가 필요 없고, Dockerfile과 CI 양쪽에서 torch가
+섞여 들어오지 않았는지 검사한다.
+
+쿠버네티스 배포:
+
+```bash
+kubectl kustomize k8s/          # 렌더 확인
+kubectl apply -k k8s/           # 적용 (Secret은 실값으로 교체 후)
+```
 
 ## Quick start
 
