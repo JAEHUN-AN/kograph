@@ -1,0 +1,30 @@
+{"id": "mh01", "type": "multi_hop", "question": "SK하이닉스에 납품하는 회사는 그 밖에 어떤 고객사를 두고 있나?", "gold": ["MICRON", "Unimicron Technology", "Infineon Technologies Asia Pacific", "Forehope Semiconductor", "Zhengzhou Xinghang Technology"], "why": "공급사를 먼저 찾고 그 공급사의 다른 고객으로 이어져야 한다. 한 공시에 답이 없다."}
+{"id": "mh02", "type": "multi_hop", "question": "한미반도체와 주성엔지니어링이 공통으로 납품하는 회사는?", "gold": ["SK하이닉스"], "why": "두 회사의 공급 관계를 각각 찾아 교집합을 구해야 한다."}
+{"id": "mh03", "type": "multi_hop", "question": "포스코퓨처엠과 에코프로머티리얼즈가 공통으로 납품하는 회사는?", "gold": ["삼성SDI"], "why": "서로 다른 공시 두 건을 교차해야 나오는 답."}
+{"id": "mh04", "type": "multi_hop", "question": "삼성SDI에 소재를 공급하는 회사 중 에코프로의 자회사인 곳은?", "gold": ["에코프로머티리얼즈"], "why": "공급 관계와 모자 관계를 함께 만족하는 노드를 찾아야 한다."}
+{"id": "mh05", "type": "multi_hop", "question": "에코프로의 자회사 중 삼성엔지니어링과 거래하는 곳은?", "gold": ["에코프로에이치엔"], "why": "모자 관계로 후보를 좁힌 뒤 공급 관계를 확인하는 2홉."}
+{"id": "mh06", "type": "multi_hop", "question": "동진쎄미켐이 채무보증한 대상 중 자회사인 곳은?", "gold": ["Dongjin Global Holdings"], "why": "보증 관계와 모자 관계의 교집합."}
+{"id": "mh07", "type": "multi_hop", "question": "에코프로비엠의 자회사 중 채무보증을 받은 곳은?", "gold": ["ECOPRO GLOBAL HUNGARY"], "why": "모자 관계와 보증 관계를 이어야 한다."}
+{"id": "mh08", "type": "multi_hop", "question": "삼성SDI의 자회사 중 채무보증 대상인 곳은?", "gold": ["StarPlus Energy"], "why": "같은 회사가 두 관계에 동시에 등장하는지 확인."}
+{"id": "mh09", "type": "multi_hop", "question": "SK아이이테크놀로지가 채무보증한 폴란드 법인은 자회사인가?", "gold": ["SK hi-tech battery materials Poland sp. z o.o."], "why": "보증 대상이 모자 관계에도 있는지 교차 확인."}
+{"id": "mh10", "type": "multi_hop", "question": "에코프로 계열사 중 에코프로머티리얼즈에 공급하는 회사는?", "gold": ["에코프로에이치엔", "에코프로"], "why": "계열 범위를 먼저 정하고 그 안에서 공급 관계를 찾는다."}
+{"id": "mh11", "type": "multi_hop", "question": "삼성SDI와 LG에너지솔루션 양쪽에 모두 공급하는 회사는?", "gold": ["포스코퓨처엠"], "why": "두 고객사를 동시에 만족하는 공급사를 찾는 교집합 질의."}
+{"id": "mh12", "type": "multi_hop", "question": "LG에너지솔루션이 채무보증한 대상 중 자회사로도 확인되는 곳은?", "gold": ["LG Energy Solution Michigan", "ES America"], "why": "보증과 모자 관계가 겹치는 법인."}
+{"id": "mh13", "type": "multi_hop", "question": "에코프로에이치엔의 모회사가 공급하는 회사는 어디인가?", "gold": ["삼성엔지니어링", "현대제철", "에코프로머티리얼즈", "삼성SDI"], "why": "자회사에서 모회사로 올라간 뒤 그 모회사의 공급 관계로 내려가는 2홉."}
+{"id": "mh14", "type": "multi_hop", "question": "SK하이닉스에 장비나 부품을 공급하는 회사들을 모두 알려줘", "gold": ["한미반도체", "주성엔지니어링"], "why": "표기가 다른 SK하이닉스 노드가 병합되어야 두 공급사가 함께 나온다."}
+{"id": "mh15", "type": "multi_hop", "question": "천보가 채무보증한 회사는 천보의 계열사인가?", "gold": ["천보비엘에스"], "why": "보증 대상과 사명 관계를 함께 봐야 판단할 수 있다."}
+{"id": "sh01", "type": "single_hop", "question": "한미반도체는 어느 회사에 공급하나?", "gold": ["SK하이닉스", "MICRON", "Unimicron Technology"], "why": "단일 공시에 직접 적힌 공급 관계."}
+{"id": "sh02", "type": "single_hop", "question": "주성엔지니어링의 공급 계약 상대는?", "gold": ["SK하이닉스"], "why": "단일 공시 조회."}
+{"id": "sh03", "type": "single_hop", "question": "LG에너지솔루션이 배터리 공급 계약을 맺은 완성차 회사는?", "gold": ["Mercedes-Benz AG", "Ford Motor Company", "ISUZU MOTORS"], "why": "단일 공시에 계약상대가 명시된다."}
+{"id": "sh04", "type": "single_hop", "question": "엘앤에프의 양극재 공급 계약 상대는?", "gold": ["Tesla, Inc. & its Affiliates", "삼성에스디아이"], "why": "단일 공시 조회."}
+{"id": "sh05", "type": "single_hop", "question": "포스코퓨처엠은 어느 회사에 공급하나?", "gold": ["삼성SDI", "LG에너지솔루션", "General Motors", "포스코"], "why": "단일 공시 조회."}
+{"id": "sh06", "type": "single_hop", "question": "동진쎄미켐이 채무보증한 회사는?", "gold": ["Dongjin Global Holdings", "Dongjin Semichem Texas", "DONGJIN USA"], "why": "채무보증 공시 직접 조회."}
+{"id": "sh07", "type": "single_hop", "question": "천보가 채무보증을 제공한 대상은?", "gold": ["천보비엘에스"], "why": "단일 공시 조회."}
+{"id": "sh08", "type": "single_hop", "question": "삼성SDI가 채무보증한 헝가리 법인은?", "gold": ["Samsung SDI Hungary"], "why": "단일 공시 조회."}
+{"id": "sh09", "type": "single_hop", "question": "에코프로의 자회사는 어디인가?", "gold": ["에코프로에이치엔", "에코프로비엠", "에코프로머티리얼즈", "에코프로이노베이션"], "why": "자회사 대리 공시 머리말에 명시된다."}
+{"id": "sh10", "type": "single_hop", "question": "SK아이이테크놀로지의 공급 계약 상대는?", "gold": ["에스케이온"], "why": "단일 공시 조회."}
+{"id": "sh11", "type": "single_hop", "question": "에코프로머티리얼즈는 어디에 공급하나?", "gold": ["삼성SDI"], "why": "단일 공시 조회."}
+{"id": "sh12", "type": "single_hop", "question": "SK하이닉스의 자회사는?", "gold": ["Solidigm", "SK hynix NAND Product Solutions"], "why": "타법인주식취득 공시에 종속회사로 명시된다."}
+{"id": "sh13", "type": "single_hop", "question": "LG에너지솔루션이 채무보증한 미국 법인은?", "gold": ["LG Energy Solution Arizona", "ES America", "LG Energy Solution Michigan"], "why": "채무보증 공시 직접 조회."}
+{"id": "sh14", "type": "single_hop", "question": "에코프로에이치엔의 공급 계약 상대는?", "gold": ["삼성엔지니어링", "비에이치아이", "에코프로머티리얼즈"], "why": "단일 공시 조회."}
+{"id": "sh15", "type": "single_hop", "question": "포스코퓨처엠의 캐나다 자회사는?", "gold": ["POSCO CHEMICAL CANADA", "POSCO FUTURE MATERIALS CANADA"], "why": "자회사 대리 공시 머리말에 명시된다."}

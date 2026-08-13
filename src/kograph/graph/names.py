@@ -38,5 +38,7 @@ def canonical_name(raw: str) -> str:
         name = _TRAILING_PAREN.sub("", name).strip()
         name = _LEGAL_SUFFIX.sub("", name).strip()
         name = _LEGAL_PREFIX.sub("", name).strip()
+        # 상호 분리 과정에서 남는 꼬리 구두점 ('테스트에너지 Michigan,')
+        name = name.strip(" ,;·")
 
     return name or _WS.sub(" ", raw.strip())

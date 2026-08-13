@@ -1,0 +1,727 @@
+{
+  "summary": {
+    "all": {
+      "vector": {
+        "hit@k": 0.7,
+        "recall": 0.5583333333333333
+      },
+      "graph": {
+        "hit@k": 0.9333333333333333,
+        "recall": 0.9166666666666666
+      },
+      "hybrid": {
+        "hit@k": 1.0,
+        "recall": 0.9833333333333333
+      }
+    },
+    "multi_hop": {
+      "vector": {
+        "hit@k": 0.5333333333333333,
+        "recall": 0.4666666666666667
+      },
+      "graph": {
+        "hit@k": 0.9333333333333333,
+        "recall": 0.9
+      },
+      "hybrid": {
+        "hit@k": 1.0,
+        "recall": 0.9666666666666667
+      }
+    },
+    "single_hop": {
+      "vector": {
+        "hit@k": 0.8666666666666667,
+        "recall": 0.65
+      },
+      "graph": {
+        "hit@k": 0.9333333333333333,
+        "recall": 0.9333333333333333
+      },
+      "hybrid": {
+        "hit@k": 1.0,
+        "recall": 1.0
+      }
+    },
+    "n": {
+      "all": 30,
+      "multi_hop": 15,
+      "single_hop": 15
+    }
+  },
+  "rows": [
+    {
+      "id": "mh01",
+      "type": "multi_hop",
+      "question": "SK하이닉스에 납품하는 회사는 그 밖에 어떤 고객사를 두고 있나?",
+      "n_gold": 5,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "MICRON",
+        "Unimicron Technology",
+        "Infineon Technologies Asia Pacific",
+        "Forehope Semiconductor",
+        "Zhengzhou Xinghang Technology"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "MICRON",
+        "Unimicron Technology",
+        "Infineon Technologies Asia Pacific",
+        "Forehope Semiconductor",
+        "Zhengzhou Xinghang Technology"
+      ]
+    },
+    {
+      "id": "mh02",
+      "type": "multi_hop",
+      "question": "한미반도체와 주성엔지니어링이 공통으로 납품하는 회사는?",
+      "n_gold": 1,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "SK하이닉스"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "SK하이닉스"
+      ]
+    },
+    {
+      "id": "mh03",
+      "type": "multi_hop",
+      "question": "포스코퓨처엠과 에코프로머티리얼즈가 공통으로 납품하는 회사는?",
+      "n_gold": 1,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "삼성SDI"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "삼성SDI"
+      ]
+    },
+    {
+      "id": "mh04",
+      "type": "multi_hop",
+      "question": "삼성SDI에 소재를 공급하는 회사 중 에코프로의 자회사인 곳은?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "에코프로머티리얼즈"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "에코프로머티리얼즈"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "에코프로머티리얼즈"
+      ]
+    },
+    {
+      "id": "mh05",
+      "type": "multi_hop",
+      "question": "에코프로의 자회사 중 삼성엔지니어링과 거래하는 곳은?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "에코프로에이치엔"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "에코프로에이치엔"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "에코프로에이치엔"
+      ]
+    },
+    {
+      "id": "mh06",
+      "type": "multi_hop",
+      "question": "동진쎄미켐이 채무보증한 대상 중 자회사인 곳은?",
+      "n_gold": 1,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "Dongjin Global Holdings"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "Dongjin Global Holdings"
+      ]
+    },
+    {
+      "id": "mh07",
+      "type": "multi_hop",
+      "question": "에코프로비엠의 자회사 중 채무보증을 받은 곳은?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "ECOPRO GLOBAL HUNGARY"
+      ],
+      "graph_hit": false,
+      "graph_recall": 0.0,
+      "graph_matched": [],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "ECOPRO GLOBAL HUNGARY"
+      ]
+    },
+    {
+      "id": "mh08",
+      "type": "multi_hop",
+      "question": "삼성SDI의 자회사 중 채무보증 대상인 곳은?",
+      "n_gold": 1,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "StarPlus Energy"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "StarPlus Energy"
+      ]
+    },
+    {
+      "id": "mh09",
+      "type": "multi_hop",
+      "question": "SK아이이테크놀로지가 채무보증한 폴란드 법인은 자회사인가?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "SK hi-tech battery materials Poland sp. z o.o."
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "SK hi-tech battery materials Poland sp. z o.o."
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "SK hi-tech battery materials Poland sp. z o.o."
+      ]
+    },
+    {
+      "id": "mh10",
+      "type": "multi_hop",
+      "question": "에코프로 계열사 중 에코프로머티리얼즈에 공급하는 회사는?",
+      "n_gold": 2,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "에코프로에이치엔",
+        "에코프로"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "에코프로에이치엔",
+        "에코프로"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "에코프로에이치엔",
+        "에코프로"
+      ]
+    },
+    {
+      "id": "mh11",
+      "type": "multi_hop",
+      "question": "삼성SDI와 LG에너지솔루션 양쪽에 모두 공급하는 회사는?",
+      "n_gold": 1,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "포스코퓨처엠"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "포스코퓨처엠"
+      ]
+    },
+    {
+      "id": "mh12",
+      "type": "multi_hop",
+      "question": "LG에너지솔루션이 채무보증한 대상 중 자회사로도 확인되는 곳은?",
+      "n_gold": 2,
+      "vector_hit": true,
+      "vector_recall": 0.5,
+      "vector_matched": [
+        "LG Energy Solution Michigan"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "LG Energy Solution Michigan",
+        "ES America"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "LG Energy Solution Michigan",
+        "ES America"
+      ]
+    },
+    {
+      "id": "mh13",
+      "type": "multi_hop",
+      "question": "에코프로에이치엔의 모회사가 공급하는 회사는 어디인가?",
+      "n_gold": 4,
+      "vector_hit": true,
+      "vector_recall": 0.5,
+      "vector_matched": [
+        "삼성엔지니어링",
+        "에코프로머티리얼즈"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "삼성엔지니어링",
+        "현대제철",
+        "에코프로머티리얼즈",
+        "삼성SDI"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "삼성엔지니어링",
+        "현대제철",
+        "에코프로머티리얼즈",
+        "삼성SDI"
+      ]
+    },
+    {
+      "id": "mh14",
+      "type": "multi_hop",
+      "question": "SK하이닉스에 장비나 부품을 공급하는 회사들을 모두 알려줘",
+      "n_gold": 2,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 0.5,
+      "graph_matched": [
+        "한미반도체"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 0.5,
+      "hybrid_matched": [
+        "한미반도체"
+      ]
+    },
+    {
+      "id": "mh15",
+      "type": "multi_hop",
+      "question": "천보가 채무보증한 회사는 천보의 계열사인가?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "천보비엘에스"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "천보비엘에스"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "천보비엘에스"
+      ]
+    },
+    {
+      "id": "sh01",
+      "type": "single_hop",
+      "question": "한미반도체는 어느 회사에 공급하나?",
+      "n_gold": 3,
+      "vector_hit": true,
+      "vector_recall": 0.3333333333333333,
+      "vector_matched": [
+        "MICRON"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "SK하이닉스",
+        "MICRON",
+        "Unimicron Technology"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "SK하이닉스",
+        "MICRON",
+        "Unimicron Technology"
+      ]
+    },
+    {
+      "id": "sh02",
+      "type": "single_hop",
+      "question": "주성엔지니어링의 공급 계약 상대는?",
+      "n_gold": 1,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "SK하이닉스"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "SK하이닉스"
+      ]
+    },
+    {
+      "id": "sh03",
+      "type": "single_hop",
+      "question": "LG에너지솔루션이 배터리 공급 계약을 맺은 완성차 회사는?",
+      "n_gold": 3,
+      "vector_hit": false,
+      "vector_recall": 0.0,
+      "vector_matched": [],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "Mercedes-Benz AG",
+        "Ford Motor Company",
+        "ISUZU MOTORS"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "Mercedes-Benz AG",
+        "Ford Motor Company",
+        "ISUZU MOTORS"
+      ]
+    },
+    {
+      "id": "sh04",
+      "type": "single_hop",
+      "question": "엘앤에프의 양극재 공급 계약 상대는?",
+      "n_gold": 2,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "Tesla, Inc. & its Affiliates",
+        "삼성에스디아이"
+      ],
+      "graph_hit": false,
+      "graph_recall": 0.0,
+      "graph_matched": [],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "Tesla, Inc. & its Affiliates",
+        "삼성에스디아이"
+      ]
+    },
+    {
+      "id": "sh05",
+      "type": "single_hop",
+      "question": "포스코퓨처엠은 어느 회사에 공급하나?",
+      "n_gold": 4,
+      "vector_hit": true,
+      "vector_recall": 0.25,
+      "vector_matched": [
+        "포스코"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "삼성SDI",
+        "LG에너지솔루션",
+        "General Motors",
+        "포스코"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "삼성SDI",
+        "LG에너지솔루션",
+        "General Motors",
+        "포스코"
+      ]
+    },
+    {
+      "id": "sh06",
+      "type": "single_hop",
+      "question": "동진쎄미켐이 채무보증한 회사는?",
+      "n_gold": 3,
+      "vector_hit": true,
+      "vector_recall": 0.3333333333333333,
+      "vector_matched": [
+        "DONGJIN USA"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "Dongjin Global Holdings",
+        "Dongjin Semichem Texas",
+        "DONGJIN USA"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "Dongjin Global Holdings",
+        "Dongjin Semichem Texas",
+        "DONGJIN USA"
+      ]
+    },
+    {
+      "id": "sh07",
+      "type": "single_hop",
+      "question": "천보가 채무보증을 제공한 대상은?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "천보비엘에스"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "천보비엘에스"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "천보비엘에스"
+      ]
+    },
+    {
+      "id": "sh08",
+      "type": "single_hop",
+      "question": "삼성SDI가 채무보증한 헝가리 법인은?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "Samsung SDI Hungary"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "Samsung SDI Hungary"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "Samsung SDI Hungary"
+      ]
+    },
+    {
+      "id": "sh09",
+      "type": "single_hop",
+      "question": "에코프로의 자회사는 어디인가?",
+      "n_gold": 4,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "에코프로에이치엔",
+        "에코프로비엠",
+        "에코프로머티리얼즈",
+        "에코프로이노베이션"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "에코프로에이치엔",
+        "에코프로비엠",
+        "에코프로머티리얼즈",
+        "에코프로이노베이션"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "에코프로에이치엔",
+        "에코프로비엠",
+        "에코프로머티리얼즈",
+        "에코프로이노베이션"
+      ]
+    },
+    {
+      "id": "sh10",
+      "type": "single_hop",
+      "question": "SK아이이테크놀로지의 공급 계약 상대는?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "에스케이온"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "에스케이온"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "에스케이온"
+      ]
+    },
+    {
+      "id": "sh11",
+      "type": "single_hop",
+      "question": "에코프로머티리얼즈는 어디에 공급하나?",
+      "n_gold": 1,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "삼성SDI"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "삼성SDI"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "삼성SDI"
+      ]
+    },
+    {
+      "id": "sh12",
+      "type": "single_hop",
+      "question": "SK하이닉스의 자회사는?",
+      "n_gold": 2,
+      "vector_hit": true,
+      "vector_recall": 0.5,
+      "vector_matched": [
+        "SK hynix NAND Product Solutions"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "Solidigm",
+        "SK hynix NAND Product Solutions"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "Solidigm",
+        "SK hynix NAND Product Solutions"
+      ]
+    },
+    {
+      "id": "sh13",
+      "type": "single_hop",
+      "question": "LG에너지솔루션이 채무보증한 미국 법인은?",
+      "n_gold": 3,
+      "vector_hit": true,
+      "vector_recall": 0.6666666666666666,
+      "vector_matched": [
+        "LG Energy Solution Arizona",
+        "LG Energy Solution Michigan"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "LG Energy Solution Arizona",
+        "ES America",
+        "LG Energy Solution Michigan"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "LG Energy Solution Arizona",
+        "ES America",
+        "LG Energy Solution Michigan"
+      ]
+    },
+    {
+      "id": "sh14",
+      "type": "single_hop",
+      "question": "에코프로에이치엔의 공급 계약 상대는?",
+      "n_gold": 3,
+      "vector_hit": true,
+      "vector_recall": 0.6666666666666666,
+      "vector_matched": [
+        "삼성엔지니어링",
+        "에코프로머티리얼즈"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "삼성엔지니어링",
+        "비에이치아이",
+        "에코프로머티리얼즈"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "삼성엔지니어링",
+        "비에이치아이",
+        "에코프로머티리얼즈"
+      ]
+    },
+    {
+      "id": "sh15",
+      "type": "single_hop",
+      "question": "포스코퓨처엠의 캐나다 자회사는?",
+      "n_gold": 2,
+      "vector_hit": true,
+      "vector_recall": 1.0,
+      "vector_matched": [
+        "POSCO CHEMICAL CANADA",
+        "POSCO FUTURE MATERIALS CANADA"
+      ],
+      "graph_hit": true,
+      "graph_recall": 1.0,
+      "graph_matched": [
+        "POSCO CHEMICAL CANADA",
+        "POSCO FUTURE MATERIALS CANADA"
+      ],
+      "hybrid_hit": true,
+      "hybrid_recall": 1.0,
+      "hybrid_matched": [
+        "POSCO CHEMICAL CANADA",
+        "POSCO FUTURE MATERIALS CANADA"
+      ]
+    }
+  ],
+  "k": 5,
+  "elapsed_sec": 21.7
+}

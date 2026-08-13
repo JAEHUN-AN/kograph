@@ -15,7 +15,8 @@
 
 - [ ] W1: 증분 ETL 소요시간 / pandas 대비 Spark 팩터 배치 처리 시간
 - [x] W2: 관계 추출 — 규칙 파서 406/509건(79.8%), 662 트리플, 0.4초, 0원 → [001](001-rule-vs-llm-extraction.md)
-- [ ] W2: vanilla RAG vs GraphRAG 정답률 (multi-hop 30문항) / 관계 추출 정밀도 (수동 라벨 200건)
+- [x] W2: vanilla RAG vs GraphRAG — 30문항 검색 recall 56% → 98% → [002](002-graphrag-vs-vector-eval.md)
+- [ ] W2: 관계 추출 정밀도 (수동 라벨 200건)
 - [ ] W3: 임베딩 처리량 (FP32 vs INT8) / 쿼리당 비용·p95 지연 before/after
 - [ ] W4: 평가 자동화 커버리지, 회귀 감지 사례
 
@@ -23,6 +24,7 @@
 
 - 000: 스코프 결정 (이 문서)
 - [001](001-rule-vs-llm-extraction.md): 관계 추출 — LLM 대신 규칙 파서를 택한 이유와 실측
-- 002: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
-- 003: (예정) 하이브리드 리트리버 — vanilla RAG vs GraphRAG 정답률
+- [002](002-graphrag-vs-vector-eval.md): GraphRAG vs vanilla RAG 검색 성능 실측
+- 003: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
+- 004: (예정) 임베딩 ONNX INT8 양자화 — CPU 처리량 before/after
 - ...

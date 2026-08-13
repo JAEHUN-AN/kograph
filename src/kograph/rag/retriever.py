@@ -95,34 +95,49 @@ def mentioned_companies(question: str, names: list[str] | None = None) -> list[s
     return sorted(set(hits), key=len, reverse=True)
 
 
-def graph_search(question: str, hops: int = MAX_HOPS, limit: int = 25) -> list[Evidence]:
-    """질문 속 회사에서 출발해 관계를 순회하고, 경로를 문장으로 반환."""
+_PATH_CYPHER = """
+    MATCH path = (a:Company)-[r*{depth}..{depth}]-(b:Company)
+    WHERE a.name IN $seeds AND a <> b
+    RETURN DISTINCT [x IN relationships(path) | type(x)] AS rels,
+           [x IN relationships(path) | x.rcept_no] AS rcepts,
+           [n IN nodes(path) | n.name] AS names
+    LIMIT $limit
+"""
+
+
+def graph_search(question: str, hops: int = MAX_HOPS, limit: int = 60) -> list[Evidence]:
+    """질문 속 회사에서 출발해 관계를 순회하고, 경로를 문장으로 반환.
+
+    홉 길이별로 나눠 질의해 **직접 관계를 먼저** 담는다. 1..2홉을 한 번에
+    조회하면 Neo4j가 임의 순서로 돌려주므로, 허브 노드(2홉 경로 700개 이상)에서
+    정작 필요한 1홉 이웃이 상한 밖으로 밀려난다.
+    """
     seeds = mentioned_companies(question)
     if not seeds:
         return []
 
-    cypher = f"""
-        MATCH path = (a:Company)-[r*1..{hops}]-(b:Company)
-        WHERE a.name IN $seeds AND a <> b
-        RETURN [x IN relationships(path) | type(x)] AS rels,
-               [x IN relationships(path) | x.rcept_no] AS rcepts,
-               [n IN nodes(path) | n.name] AS names
-        LIMIT $limit
-    """
     out: list[Evidence] = []
+    seen: set[str] = set()
     with _driver() as d, d.session() as s:
-        for rec in s.run(cypher, seeds=seeds[:3], limit=limit):
-            names, rels = rec["names"], rec["rels"]
-            hop_text = names[0]
-            for rel, name in zip(rels, names[1:], strict=True):
-                hop_text += f" -[{rel}]-> {name}"
-            rcepts = [r for r in rec["rcepts"] if r]
-            out.append(Evidence(
-                source="graph",
-                text=hop_text,
-                rcept_no=rcepts[0] if rcepts else None,
-                entities=list(names),
-            ))
+        for depth in range(1, hops + 1):
+            budget = limit - len(out)
+            if budget <= 0:
+                break
+            for rec in s.run(_PATH_CYPHER.format(depth=depth), seeds=seeds[:3], limit=budget):
+                names, rels = rec["names"], rec["rels"]
+                hop_text = names[0]
+                for rel, name in zip(rels, names[1:], strict=True):
+                    hop_text += f" -[{rel}]-> {name}"
+                if hop_text in seen:  # 정정공시 탓에 같은 관계가 여러 엣지로 존재
+                    continue
+                seen.add(hop_text)
+                rcepts = [r for r in rec["rcepts"] if r]
+                out.append(Evidence(
+                    source="graph",
+                    text=hop_text,
+                    rcept_no=rcepts[0] if rcepts else None,
+                    entities=list(names),
+                ))
     return out
 
 

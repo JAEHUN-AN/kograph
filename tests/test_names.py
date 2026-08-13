@@ -57,6 +57,10 @@ class TestEdgeCases:
         """전부 깎이면 빈 노드가 되므로 원문을 유지해야 한다."""
         assert canonical_name("주식회사") == "주식회사"
 
+    def test_strips_trailing_punctuation(self):
+        """상호 분리 과정에서 남는 꼬리 쉼표는 엔티티 매칭을 방해한다."""
+        assert canonical_name("테스트에너지 Michigan,") == "테스트에너지 Michigan"
+
     def test_leading_paren_name_without_english(self):
         # 한글만 있는 괄호는 영문 병기가 아니므로 보존
         assert canonical_name("테스트전자(특별계정)") == "테스트전자(특별계정)"
