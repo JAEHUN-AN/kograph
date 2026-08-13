@@ -71,6 +71,29 @@ def list_companies() -> str:
         return "\n".join(lines)
 
 
+# 거래·지배 관계를 임원·특수관계인보다 앞에 둔다. 리서치 질문의 답은
+# 대부분 앞쪽에 있고, 모델이 결과를 잘라 읽어도 중요한 것이 남는다.
+_RELATION_PRIORITY = (
+    "SUPPLIES_TO",
+    "INVESTS_IN",
+    "OWNS_STAKE",
+    "GUARANTEES_DEBT_OF",
+    "SUBSIDIARY_OF",
+    "OFFICER_OF",
+    "RELATED_PARTY_OF",
+)
+
+
+def _relation_sort_key(evidence) -> tuple[int, int, str]:
+    """(관계 우선순위, 홉 수, 표시문자열). 같은 순위면 짧은 경로가 먼저."""
+    rels = getattr(evidence, "rel_types", None) or []
+    rank = min(
+        (_RELATION_PRIORITY.index(r) for r in rels if r in _RELATION_PRIORITY),
+        default=len(_RELATION_PRIORITY),
+    )
+    return (rank, len(rels), evidence.text)
+
+
 @mcp.tool()
 def get_company_relations(company: str, hops: int = 1) -> str:
     """한 기업의 거래·지배 관계를 그래프에서 조회한다.
@@ -92,7 +115,7 @@ def get_company_relations(company: str, hops: int = 1) -> str:
                 "list_companies로 조회 가능한 회사명을 확인하세요."
             )
         lines = [f"'{company}' 관련 관계 {len(evidences)}건 (hops={hops}):"]
-        for ev in evidences:
+        for ev in sorted(evidences, key=_relation_sort_key):
             cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
             lines.append(f"  {ev.text}{cite}")
         return "\n".join(lines)

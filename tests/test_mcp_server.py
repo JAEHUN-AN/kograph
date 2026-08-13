@@ -8,6 +8,7 @@ from datetime import date
 
 from kograph.mcp_server.server import (
     _format_price_row,
+    _relation_sort_key,
     _shared_partners,
     list_companies,
     mcp,
@@ -21,6 +22,55 @@ class FakeEvidence:
         self.entities = entities
         self.text = " -> ".join(entities)
         self.rcept_no = None
+
+
+class FakeRelEvidence:
+    """정렬 검증용 대역 — rel_types와 text만 쓴다."""
+
+    def __init__(self, rel_types, text="edge"):
+        self.rel_types = rel_types
+        self.text = text
+        self.entities = []
+        self.rcept_no = None
+
+
+class TestRelationOrdering:
+    def test_business_relations_come_before_people(self):
+        """공급·투자가 임원·특수관계인보다 앞에 와야 한다. 리서치 질문의
+        답이 사람 명단에 묻히면 도구가 쓸모없어진다."""
+        evidences = [
+            FakeRelEvidence(["RELATED_PARTY_OF"], "특수관계인"),
+            FakeRelEvidence(["OFFICER_OF"], "임원"),
+            FakeRelEvidence(["SUPPLIES_TO"], "공급"),
+            FakeRelEvidence(["GUARANTEES_DEBT_OF"], "보증"),
+        ]
+
+        ordered = [e.text for e in sorted(evidences, key=_relation_sort_key)]
+
+        assert ordered == ["공급", "보증", "임원", "특수관계인"]
+
+    def test_shorter_paths_first_within_same_rank(self):
+        """같은 우선순위면 1홉이 2홉보다 먼저 — 직접 관계가 더 강한 근거다."""
+        evidences = [
+            FakeRelEvidence(["SUPPLIES_TO", "SUPPLIES_TO"], "2홉"),
+            FakeRelEvidence(["SUPPLIES_TO"], "1홉"),
+        ]
+
+        ordered = [e.text for e in sorted(evidences, key=_relation_sort_key)]
+
+        assert ordered == ["1홉", "2홉"]
+
+    def test_unknown_relation_type_sorts_last_without_error(self):
+        """미등록 관계가 생겨도 정렬이 깨지지 않아야 한다."""
+        evidences = [
+            FakeRelEvidence(["MYSTERY_REL"], "미등록"),
+            FakeRelEvidence(["SUPPLIES_TO"], "공급"),
+            FakeRelEvidence([], "관계없음"),
+        ]
+
+        ordered = [e.text for e in sorted(evidences, key=_relation_sort_key)]
+
+        assert ordered[0] == "공급"
 
 
 class TestServerMetadata:

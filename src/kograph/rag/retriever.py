@@ -39,6 +39,8 @@ class Evidence:
     rcept_no: str | None = None
     score: float | None = None
     entities: list[str] = field(default_factory=list)
+    # 경로상의 관계 유형. 렌더된 text를 되파싱하지 않고 정렬·필터에 쓴다.
+    rel_types: list[str] = field(default_factory=list)
 
 
 def vector_search(question: str, k: int = DEFAULT_K) -> list[Evidence]:
@@ -167,6 +169,7 @@ def _graph_search(question: str, hops: int, limit: int) -> list[Evidence]:
                     text=hop_text,
                     rcept_no=rcepts[0] if rcepts else None,
                     entities=list(names),
+                    rel_types=list(rels),
                 ))
     return out
 
