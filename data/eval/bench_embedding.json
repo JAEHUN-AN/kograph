@@ -1,0 +1,30 @@
+[
+  {
+    "backend": "torch",
+    "chunks": 60,
+    "elapsed_sec": 41.89,
+    "chunks_per_sec": 1.43,
+    "ms_per_chunk": 698.1,
+    "model_mb": 2165.9
+  },
+  {
+    "backend": "onnx",
+    "chunks": 60,
+    "elapsed_sec": 47.4,
+    "chunks_per_sec": 1.27,
+    "ms_per_chunk": 789.9,
+    "model_mb": 2162.5,
+    "cos_sim_mean": 1.0,
+    "cos_sim_min": 1.0
+  },
+  {
+    "backend": "onnx-int8",
+    "chunks": 60,
+    "elapsed_sec": 20.63,
+    "chunks_per_sec": 2.91,
+    "ms_per_chunk": 343.9,
+    "model_mb": 543.6,
+    "cos_sim_mean": 0.97707,
+    "cos_sim_min": 0.96556
+  }
+]

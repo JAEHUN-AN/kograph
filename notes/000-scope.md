@@ -17,7 +17,8 @@
 - [x] W2: 관계 추출 — 규칙 파서 406/509건(79.8%), 662 트리플, 0.4초, 0원 → [001](001-rule-vs-llm-extraction.md)
 - [x] W2: vanilla RAG vs GraphRAG — 30문항 검색 recall 56% → 98% → [002](002-graphrag-vs-vector-eval.md)
 - [ ] W2: 관계 추출 정밀도 (수동 라벨 200건)
-- [ ] W3: 임베딩 처리량 (FP32 vs INT8) / 쿼리당 비용·p95 지연 before/after
+- [x] W3: 임베딩 처리량 FP32 1.43 → INT8 2.91 chunks/s (2.03x), 가중치 4배 축소, 검색 품질 동일 → [003](003-onnx-int8-quantization.md)
+- [ ] W3: 쿼리당 LLM 비용·p95 지연 before/after (크레딧 확보 후)
 - [ ] W4: 평가 자동화 커버리지, 회귀 감지 사례
 
 ## 노트 목록
@@ -25,6 +26,6 @@
 - 000: 스코프 결정 (이 문서)
 - [001](001-rule-vs-llm-extraction.md): 관계 추출 — LLM 대신 규칙 파서를 택한 이유와 실측
 - [002](002-graphrag-vs-vector-eval.md): GraphRAG vs vanilla RAG 검색 성능 실측
-- 003: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
-- 004: (예정) 임베딩 ONNX INT8 양자화 — CPU 처리량 before/after
+- [003](003-onnx-int8-quantization.md): 임베딩 ONNX INT8 양자화 — CPU 처리량 2배, 품질 손실 0
+- 004: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
 - ...

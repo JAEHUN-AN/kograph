@@ -33,6 +33,9 @@ airflow/*.db
 # Docker volumes
 docker/volumes/
 
+# 로컬 모델 산출물 (ONNX/INT8, 수 GB — 스크립트로 재생성 가능)
+models/
+
 # IDE / OS
 .idea/
 .vscode/

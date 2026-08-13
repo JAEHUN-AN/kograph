@@ -24,6 +24,10 @@ rag = [
     "psycopg[binary]>=3.2",
 ]
 agent = ["langgraph>=0.2", "langchain-anthropic>=0.2"]
+onnx = [
+    "onnxruntime>=1.19",              # CPU 추론 백엔드
+    "optimum[onnxruntime]>=1.23",     # ONNX 변환 + 동적 양자화
+]
 mcp = ["mcp>=1.1"]
 dev = ["pytest>=8.3", "pytest-cov>=5.0", "ruff>=0.6", "responses>=0.25"]
 

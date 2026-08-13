@@ -13,6 +13,7 @@ import os
 import re
 import time
 from functools import lru_cache
+from pathlib import Path
 
 import psycopg
 from pgvector.psycopg import register_vector
@@ -45,12 +46,74 @@ def connect_pg() -> psycopg.Connection:
     return conn
 
 
-@lru_cache(maxsize=2)
-def get_model(name: str = DEFAULT_MODEL):
-    """모델 로딩은 수 초~수십 초 걸리므로 프로세스당 한 번만."""
+# 백엔드는 환경변수로 바꾼다 — 평가·적재 스크립트를 고치지 않고 전환하기 위함.
+#   torch(기본) | onnx | onnx-int8
+EMBED_BACKEND = os.getenv("KOGRAPH_EMBED_BACKEND", "torch")
+ONNX_DIR = Path(os.getenv("KOGRAPH_ONNX_DIR", "models/bge-m3-onnx"))
+ONNX_FP32_FILE = "onnx/model.onnx"
+ONNX_INT8_FILE = "onnx/model_qint8_avx512_vnni.onnx"
+MAX_SEQ_TOKENS = 1024  # 800자 청크면 넉넉하다
+
+
+class OnnxEmbedder:
+    """onnxruntime 직접 추론 — SentenceTransformer와 같은 encode() 인터페이스.
+
+    SentenceTransformer가 내보낸 ONNX는 풀링·정규화까지 그래프에 포함해
+    출력이 `sentence_embedding`이다. optimum은 원시 `last_hidden_state`를
+    기대하므로 그 경로로는 로드되지 않는다. 어차피 후처리가 그래프 안에 있는
+    편이 빠르므로 런타임을 직접 쓴다.
+    """
+
+    def __init__(self, model_dir: Path, file_name: str):
+        import onnxruntime as ort
+        from transformers import AutoTokenizer
+
+        path = model_dir / file_name
+        if not path.exists():
+            raise FileNotFoundError(
+                f"ONNX 모델이 없습니다: {path}\n"
+                "먼저 'uv run python scripts/bench_embedding.py'로 생성하세요."
+            )
+        options = ort.SessionOptions()
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        self.session = ort.InferenceSession(
+            str(path), options, providers=["CPUExecutionProvider"]
+        )
+        self.tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
+        self._inputs = {i.name for i in self.session.get_inputs()}
+
+    def encode(self, texts, batch_size: int = 32, normalize_embeddings: bool = True, **_):
+        import numpy as np
+
+        out = []
+        for start in range(0, len(texts), batch_size):
+            batch = list(texts[start:start + batch_size])
+            enc = self.tokenizer(
+                batch, padding=True, truncation=True,
+                max_length=MAX_SEQ_TOKENS, return_tensors="np",
+            )
+            feed = {k: v for k, v in enc.items() if k in self._inputs}
+            vectors = self.session.run(["sentence_embedding"], feed)[0]
+            if normalize_embeddings:
+                norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+                vectors = vectors / np.maximum(norms, 1e-12)
+            out.append(vectors)
+        return np.vstack(out) if out else np.empty((0, EMBED_DIM), dtype="float32")
+
+
+@lru_cache(maxsize=3)
+def get_model(name: str = DEFAULT_MODEL, backend: str = ""):
+    """모델 로딩은 수 초~수십 초 걸리므로 (모델, 백엔드)당 한 번만."""
+    backend = backend or EMBED_BACKEND
+    logger.info("loading embedding model %s (cpu, backend=%s)", name, backend)
+
+    if backend == "onnx":
+        return OnnxEmbedder(ONNX_DIR, ONNX_FP32_FILE)
+    if backend == "onnx-int8":
+        return OnnxEmbedder(ONNX_DIR, ONNX_INT8_FILE)
+
     from sentence_transformers import SentenceTransformer
 
-    logger.info("loading embedding model %s (cpu)", name)
     return SentenceTransformer(name, device="cpu")
 
 
@@ -82,9 +145,11 @@ def chunk_text(text: str, size: int = CHUNK_CHARS, overlap: int = CHUNK_OVERLAP)
     return chunks
 
 
-def embed_texts(texts: list[str], model_name: str = DEFAULT_MODEL) -> list[list[float]]:
+def embed_texts(
+    texts: list[str], model_name: str = DEFAULT_MODEL, backend: str = ""
+) -> list[list[float]]:
     """정규화된 임베딩 반환 (코사인 거리 사용 전제)."""
-    model = get_model(model_name)
+    model = get_model(model_name, backend)
     vectors = model.encode(
         texts,
         batch_size=BATCH_SIZE,

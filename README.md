@@ -32,7 +32,7 @@ pykrx (KRX) ──┼─ Airflow ─ Oracle 23ai ──────┤
 - [x] **Week 1 — ETL 기반**: DART·KRX 수집기, Oracle 스키마, Airflow DAG, Spark 팩터 배치
 - [x] **Week 2 — 지식그래프 + RAG**: 규칙 기반 관계 추출 → Neo4j, 하이브리드 리트리버, 평가셋 30문항
 - [x] **Week 3a — MCP 서버**: 도구 6종, stdio 통합 검증
-- [ ] **Week 3b — 최적화**: 임베딩 ONNX INT8, LLM 라우팅/캐싱
+- [x] **Week 3b — 임베딩 최적화**: ONNX INT8 양자화, CPU 처리량 2배
 - [ ] **Week 4 — MLOps**: k3s 배포, 회귀평가 CI, Prometheus/Grafana
 
 측정 결과와 그 과정에서 잡은 결함은 [notes/](notes/)에 있다.
@@ -43,6 +43,7 @@ pykrx (KRX) ──┼─ Airflow ─ Oracle 23ai ──────┤
 | 검색 recall | vector 56% → hybrid 98% ([002](notes/002-graphrag-vs-vector-eval.md)) |
 | 지식그래프 | 노드 184, 관계 642 |
 | 벡터 인덱스 | 공시 2,178건 → 8,934 청크 (bge-m3, CPU) |
+| 임베딩 처리량 | FP32 1.43 → INT8 2.91 chunks/s, 가중치 2,166 → 544 MB, 검색 품질 동일 ([003](notes/003-onnx-int8-quantization.md)) |
 
 ## MCP 서버
 
