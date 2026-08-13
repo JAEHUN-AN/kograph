@@ -9,54 +9,21 @@
 """
 
 import argparse
-import json
 import logging
 import time
-from enum import StrEnum
 
 import anthropic
-from pydantic import BaseModel, Field
 
 from kograph.config import get_settings
 from kograph.db.oracle import connect
+from kograph.graph.models import ExtractionResult, Triple
+from kograph.graph.store import pending_filings, store_triples
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "claude-haiku-4-5"
 MAX_DOC_CHARS = 8_000  # 주요사항보고는 대부분 이 안에 핵심이 있음
 COMMIT_EVERY = 20
-
-# 관계 추출 가치가 높은 보고서명 키워드
-TARGET_REPORT_KEYWORDS = [
-    "공급계약", "타법인주식", "출자", "채무보증", "합병", "분할",
-    "영업양수", "영업양도", "지분", "주식변동", "유상증자", "신규시설투자",
-]
-
-
-class Predicate(StrEnum):
-    SUPPLIES_TO = "SUPPLIES_TO"            # 공급계약: subject가 object에 공급
-    OWNS_STAKE = "OWNS_STAKE"              # 지분 보유
-    INVESTS_IN = "INVESTS_IN"              # 출자·신규투자
-    GUARANTEES_DEBT_OF = "GUARANTEES_DEBT_OF"  # 채무보증
-    ACQUIRES = "ACQUIRES"                  # 인수·합병·영업양수
-    SUBSIDIARY_OF = "SUBSIDIARY_OF"        # 종속회사 관계
-    PARTNERS_WITH = "PARTNERS_WITH"        # 합작·업무제휴
-    OFFICER_OF = "OFFICER_OF"              # 임원 겸직
-
-
-class Triple(BaseModel):
-    subject: str = Field(description="관계의 주체 기업/인물 정식 명칭")
-    predicate: Predicate
-    object: str = Field(description="관계의 대상 기업/인물 정식 명칭")
-    amount_krw: int | None = Field(None, description="계약·출자·보증 금액(원), 명시된 경우만")
-    ratio_pct: float | None = Field(None, description="지분율·자기자본대비 비율(%), 명시된 경우만")
-    start_date: str | None = Field(None, description="계약/효력 시작일 YYYY-MM-DD")
-    end_date: str | None = Field(None, description="계약/효력 종료일 YYYY-MM-DD")
-    note: str | None = Field(None, description="관계 파악에 중요한 부가 정보 한 줄")
-
-
-class ExtractionResult(BaseModel):
-    triples: list[Triple] = Field(description="공시에서 확인된 기업 간 관계. 없으면 빈 배열")
 
 
 _SYSTEM = """너는 한국 금융감독원 DART 공시에서 기업 간 관계를 추출하는 분석가다.
@@ -90,41 +57,6 @@ def extract_triples(
     )
     result = response.parsed_output
     return result.triples if result else []
-
-
-def pending_filings(limit: int | None) -> list[tuple]:
-    """추출 대상: 본문 있음 + 트리플 미생성 + 대상 보고서 유형."""
-    kw_cond = " OR ".join(f"report_nm LIKE '%{kw}%'" for kw in TARGET_REPORT_KEYWORDS)
-    sql = f"""
-        SELECT f.rcept_no, f.corp_name, f.report_nm, f.doc_text
-        FROM filing f
-        WHERE f.doc_text IS NOT NULL
-          AND ({kw_cond})
-          AND NOT EXISTS (SELECT 1 FROM kg_triple t WHERE t.rcept_no = f.rcept_no)
-        ORDER BY f.rcept_dt
-    """
-    if limit:
-        sql += f" FETCH FIRST {int(limit)} ROWS ONLY"
-    with connect() as conn, conn.cursor() as cur:
-        cur.execute(sql)
-        rows = []
-        for rcept_no, corp_name, report_nm, doc_text in cur.fetchall():
-            text = doc_text.read() if hasattr(doc_text, "read") else doc_text
-            rows.append((rcept_no, corp_name, report_nm, text))
-        return rows
-
-
-def store_triples(rcept_no: str, model: str, triples: list[Triple], cur) -> int:
-    for t in triples:
-        props = t.model_dump(exclude={"subject", "predicate", "object"}, exclude_none=True)
-        cur.execute(
-            """INSERT INTO kg_triple
-               (rcept_no, subject_name, predicate, object_name, props_json, model)
-               VALUES (:1, :2, :3, :4, :5, :6)""",
-            [rcept_no, t.subject[:200], t.predicate.value, t.object[:200],
-             json.dumps(props, ensure_ascii=False), model],
-        )
-    return len(triples)
 
 
 def run(limit: int | None, model: str) -> tuple[int, int]:

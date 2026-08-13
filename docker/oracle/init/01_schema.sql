@@ -56,9 +56,10 @@ CREATE INDEX ix_price_date ON price_daily (trade_date);
 CREATE TABLE kg_triple (
     triple_id    NUMBER GENERATED ALWAYS AS IDENTITY,
     rcept_no     CHAR(14)      NOT NULL,   -- 근거 공시
-    subject_name VARCHAR2(200) NOT NULL,
-    predicate    VARCHAR2(50)  NOT NULL,   -- SUPPLIES_TO | OWNS_STAKE | ...
-    object_name  VARCHAR2(200) NOT NULL,
+    -- CHAR 시맨틱: 기본 BYTE 기준이면 한글 상호가 200바이트(약 66자)에서 잘린다
+    subject_name VARCHAR2(200 CHAR) NOT NULL,
+    predicate    VARCHAR2(50)       NOT NULL,   -- SUPPLIES_TO | OWNS_STAKE | ...
+    object_name  VARCHAR2(200 CHAR) NOT NULL,
     props_json   CLOB,                     -- 계약금액·지분율 등 속성
     model        VARCHAR2(50),             -- 추출에 쓴 LLM
     extracted_at TIMESTAMP     DEFAULT SYSTIMESTAMP NOT NULL,
