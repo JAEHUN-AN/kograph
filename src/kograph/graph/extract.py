@@ -12,7 +12,7 @@ import argparse
 import json
 import logging
 import time
-from enum import Enum
+from enum import StrEnum
 
 import anthropic
 from pydantic import BaseModel, Field
@@ -33,7 +33,7 @@ TARGET_REPORT_KEYWORDS = [
 ]
 
 
-class Predicate(str, Enum):
+class Predicate(StrEnum):
     SUPPLIES_TO = "SUPPLIES_TO"            # 공급계약: subject가 object에 공급
     OWNS_STAKE = "OWNS_STAKE"              # 지분 보유
     INVESTS_IN = "INVESTS_IN"              # 출자·신규투자
@@ -145,6 +145,19 @@ def run(limit: int | None, model: str) -> tuple[int, int]:
                 triples = extract_triples(client, model, corp_name, report_nm, doc_text)
                 total_triples += store_triples(rcept_no, model, triples, cur)
                 done += 1
+            except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as exc:
+                conn.commit()
+                raise RuntimeError(f"aborting: credential problem — {exc}") from exc
+            except anthropic.BadRequestError as exc:
+                # 크레딧 부족은 400으로 오고 재시도해도 풀리지 않는다 -> 즉시 중단.
+                # 그 외 400(과대 입력 등)은 해당 공시만 건너뛴다.
+                if "credit balance" in str(exc).lower():
+                    conn.commit()
+                    raise RuntimeError(
+                        "aborting: Anthropic credit balance exhausted — "
+                        "top up at console.anthropic.com > Plans & Billing"
+                    ) from exc
+                logger.error("skipped %s: %s", rcept_no, exc)
             except anthropic.APIStatusError as exc:
                 # 개별 공시 실패는 격리 — 다음 실행에서 재시도됨 (kg_triple 미생성 상태 유지)
                 logger.error("extract failed %s: %s", rcept_no, exc)

@@ -13,7 +13,7 @@
 import logging
 
 from pyspark.sql import DataFrame, SparkSession, Window
-from pyspark.sql import functions as F
+from pyspark.sql import functions as F  # noqa: N812  (PySpark 관례)
 
 from kograph.config import get_settings
 
