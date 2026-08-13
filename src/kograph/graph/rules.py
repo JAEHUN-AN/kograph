@@ -291,12 +291,30 @@ def _parse_debt_guarantee(filer: str, lines: list[str], report_nm: str) -> list[
     )]
 
 
+def _shareholder_predicate(relation: str | None) -> Predicate:
+    """공시의 '관계'가 발행회사 임원임을 말할 때만 OFFICER_OF.
+
+    '계열사임원'은 이 회사의 임원이 아니라 계열사의 임원이므로 제외한다.
+    관계가 비어 있으면(공시의 약 30%) 임원이라고 단정할 근거가 없다.
+    """
+    if not relation:
+        return Predicate.RELATED_PARTY_OF
+    text = relation.replace(" ", "")
+    if "임원" in text and "계열사" not in text:
+        return Predicate.OFFICER_OF
+    return Predicate.RELATED_PARTY_OF
+
+
 def _parse_shareholder_change(filer: str, lines: list[str], report_nm: str) -> list[Triple]:
-    """최대주주등소유주식변동신고서 -> 개인 OFFICER_OF 발행회사.
+    """최대주주등소유주식변동신고서 -> 신고 대상자와 발행회사의 관계.
 
     '개인별 세부변동사항' 섹션 안에서만 '성명' 블록을 읽는다. 뒤따르는
     '최대주주등 주식소유현황(총괄현황)'은 라벨-값 쌍이 아니라 표 머리글이
     연속으로 나열된 구조라, 범위를 두지 않으면 머리글을 이름으로 오독한다.
+
+    신고 대상은 임원만이 아니다. 친인척·계열사·재단도 들어오므로 공시의
+    '관계'가 임원임을 말할 때만 OFFICER_OF를 준다. 이 구분이 없으면 법인이
+    사람의 자리에 들어가 '한미컴퍼니가 한미반도체의 임원'이 된다.
     """
     start, end = _section_bounds(lines, "개인별 세부변동사항")
 
@@ -319,7 +337,7 @@ def _parse_shareholder_change(filer: str, lines: list[str], report_nm: str) -> l
         seen.add(person)
         triples.append(Triple(
             subject=person,
-            predicate=Predicate.OFFICER_OF,
+            predicate=_shareholder_predicate(relation),
             object=filer,
             note=relation,
         ))

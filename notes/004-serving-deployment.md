@@ -10,7 +10,7 @@ MCP 서버는 stdio 전용이라 배포·모니터링 대상이 될 수 없었�
 - 멀티스테이지 Dockerfile, 비루트 실행
 - docker compose에 kograph-mcp / prometheus / grafana 추가
 - k8s 매니페스트(Deployment·Service·ConfigMap·Secret·PVC) + kustomize
-- GitHub Actions CI: 린트, 테스트 63건, 이미지 빌드·검증
+- GitHub Actions CI: 린트, 테스트 65건, 이미지 빌드·검증
 
 ## 첫 이미지가 8.8GB였다
 
@@ -78,7 +78,7 @@ liveness만 있으면 초기 로딩 중에 파드가 죽는다.
 
 ## CI 설계
 
-단위 테스트 63건은 **DB도 API 키도 쓰지 않는다.** 전부 합성 데이터라
+단위 테스트 65건은 **DB도 API 키도 쓰지 않는다.** 전부 합성 데이터라
 서비스 컨테이너 없이 돌고, 그래서 CI가 빠르고 흔들리지 않는다. 이는 우연이
 아니라 처음부터 테스트를 그렇게 쓴 결과다(노트 001·002).
 

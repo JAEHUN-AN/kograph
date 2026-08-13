@@ -14,6 +14,9 @@ class Predicate(StrEnum):
     SUBSIDIARY_OF = "SUBSIDIARY_OF"            # 종속회사 관계
     PARTNERS_WITH = "PARTNERS_WITH"            # 합작·업무제휴
     OFFICER_OF = "OFFICER_OF"                  # 임원 재직·겸직
+    # 최대주주등소유주식변동신고서의 신고 대상에는 임원뿐 아니라 친인척·
+    # 계열사·재단도 포함된다. OFFICER_OF로 뭉치면 법인이 임원이 된다.
+    RELATED_PARTY_OF = "RELATED_PARTY_OF"      # 최대주주 특수관계인
 
 
 class Triple(BaseModel):

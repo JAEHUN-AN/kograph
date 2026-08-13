@@ -107,6 +107,34 @@ SHAREHOLDER_CHANGE = """최대주주등소유주식변동신고서
 겸직내용2
 """
 
+# 신고 대상에 법인·친인척·관계 미기재가 섞인 경우.
+MIXED_SHAREHOLDERS = """최대주주등소유주식변동신고서
+1. 발행회사 정보
+회사명
+테스트반도체(주)
+4. 개인별 세부변동사항
+성명
+홍길동
+최대주주 및 발행회사와의 관계
+발행회사 임원
+성명
+박영수
+최대주주 및 발행회사와의 관계
+계열사임원
+성명
+테스트홀딩스
+최대주주 및 발행회사와의 관계
+계열사
+성명
+홍말순
+최대주주 및 발행회사와의 관계
+친인척
+성명
+미상인
+최대주주 및 발행회사와의 관계
+-
+"""
+
 
 class TestSupplyContract:
     def test_extracts_counterparty_amount_and_period(self):
@@ -193,6 +221,25 @@ class TestShareholderChange:
         names = {t.subject for t in triples}
         assert "생년월일 또는 사업자등록번호" not in names
         assert "성별" not in names
+
+    def test_non_officer_related_parties_are_not_officers(self):
+        """신고 대상에는 법인·친인척도 들어온다. 전부 임원으로 묶으면
+        '테스트홀딩스가 테스트반도체의 임원'이라는 거짓 관계가 생긴다."""
+        triples = parse("테스트반도체", "최대주주등소유주식변동신고서", MIXED_SHAREHOLDERS)
+        by_name = {t.subject: t.predicate for t in triples}
+
+        assert by_name["홍길동"] is Predicate.OFFICER_OF
+        # 계열사의 임원은 발행회사의 임원이 아니다
+        assert by_name["박영수"] is Predicate.RELATED_PARTY_OF
+        assert by_name["테스트홀딩스"] is Predicate.RELATED_PARTY_OF
+        assert by_name["홍말순"] is Predicate.RELATED_PARTY_OF
+
+    def test_missing_relation_does_not_assume_officer(self):
+        """관계가 비어 있으면 임원이라고 단정할 근거가 없다."""
+        triples = parse("테스트반도체", "최대주주등소유주식변동신고서", MIXED_SHAREHOLDERS)
+        unknown = next(t for t in triples if t.subject == "미상인")
+
+        assert unknown.predicate is Predicate.RELATED_PARTY_OF
 
 
 SUBSIDIARY_SUPPLY = """단일판매ㆍ공급계약체결
