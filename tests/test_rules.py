@@ -319,6 +319,38 @@ class TestMultipleIssuers:
 
         assert all(t.amount_krw is None for t in triples)
 
+    def test_does_not_split_comma_inside_company_name(self):
+        """'… Co., Ltd)'의 내부 쉼표까지 자르면 'Ltd)'가 유령 회사가 된다."""
+        text = (
+            "타법인 주식 및 출자증권 취득결정\n"
+            "1. 발행회사\n"
+            "회사명(국적)\n"
+            "테스트유한공사(Test New Energy Co., Ltd)\n"
+            "2. 취득내역\n"
+            "취득금액(원)\n"
+            "1,000,000,000\n"
+        )
+
+        triples = parse("테스트퓨처엠", "타법인주식및출자증권취득결정", text)
+
+        assert [t.object for t in triples] == ["테스트유한공사"]
+
+    def test_legal_fragment_with_parenthetical_suffix(self):
+        """'…, Inc(가칭)'도 앞 상호에 되붙어야 한다 — 'Inc' 유령 노드 방지."""
+        text = (
+            "타법인 주식 및 출자증권 취득결정\n"
+            "1. 발행회사\n"
+            "회사명\n"
+            "테스트에너지 Arizona ESS, Inc(가칭)\n"
+            "2. 취득내역\n"
+            "취득금액(원)\n"
+            "1,000,000,000\n"
+        )
+
+        triples = parse("테스트에너지솔루션", "타법인주식및출자증권취득결정", text)
+
+        assert [t.object for t in triples] == ["테스트에너지 Arizona ESS, Inc"]
+
     def test_single_company_keeps_amount(self):
         triples = parse("테스트전자", "타법인주식및출자증권취득결정", STAKE_ACQUISITION)
 

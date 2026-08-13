@@ -164,15 +164,49 @@ def _subsidiary_name(lines: list[str]) -> str | None:
 # --- 폼별 파서 ---------------------------------------------------------------
 
 
+# 법인격 뒤에 '(가칭)' 같은 괄호가 붙는 경우까지 조각으로 인정한다
+_LEGAL_FRAGMENT = re.compile(
+    r"^\s*(Ltd|Inc|lnc|LLC|Corp|Co|GmbH|Pte|Zrt|S\.?A|B\.?V|N\.?V)\b\.?\s*"
+    r"(\([^()]*\))?[.,)\s]*$",
+    re.IGNORECASE,
+)
+
+
 def _split_companies(raw: str | None) -> list[str]:
     """'A사(중국), B사(중국)' -> ['A사', 'B사'].
 
     지분 일괄 취득·처분 공시는 발행회사 칸에 여러 상호를 쉼표로 나열한다.
+    단순 split은 상호 내부의 쉼표('… New Energy Co., Ltd')까지 쪼개
+    'Ltd)' 같은 유령 회사를 만든다. 괄호 밖 쉼표에서만 자르고, 법인격
+    조각만 남은 항목은 앞 상호에 되붙인다.
     """
     if not raw:
         return []
+
+    parts: list[str] = []
+    buf: list[str] = []
+    depth = 0
+    for ch in raw:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth = max(0, depth - 1)
+        if ch == "," and depth == 0:
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    parts.append("".join(buf))
+
+    merged: list[str] = []
+    for part in parts:
+        if merged and _LEGAL_FRAGMENT.match(part):
+            merged[-1] = f"{merged[-1]}, {part.strip()}"
+        else:
+            merged.append(part)
+
     names = []
-    for part in raw.split(","):
+    for part in merged:
         name = _strip_trailing_paren(_clean_name(part))
         if name:
             names.append(name)
