@@ -253,7 +253,9 @@ def graph_overview() -> str:
         return (
             f"지식그래프: 회사 노드 {len(names)}개.\n"
             "관계 유형: SUPPLIES_TO(공급), OWNS_STAKE(지분), INVESTS_IN(출자), "
-            "GUARANTEES_DEBT_OF(채무보증), SUBSIDIARY_OF(모자), OFFICER_OF(임원).\n"
+            "GUARANTEES_DEBT_OF(채무보증), SUBSIDIARY_OF(모자), OFFICER_OF(임원), "
+            "RELATED_PARTY_OF(최대주주 특수관계인 — 친인척·계열사 포함이며 "
+            "임원이 아니다).\n"
             "출처: DART 주요사항보고서 (반도체·2차전지 밸류체인, 최근 3년).\n"
             f"분석 대상 종목: {', '.join(examples)}\n"
             "이 밖에 거래상대·자회사로 등장한 법인이 함께 들어 있다."

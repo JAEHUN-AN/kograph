@@ -113,6 +113,10 @@ uv run python scripts/verify_mcp.py                            # 클라이언트
 쓸 수 없다. 도구 설명에는 "무엇을 하는지"가 아니라 **"언제 호출해야 하는지"**를
 적었다 — 최신 모델일수록 도구를 보수적으로 고르기 때문이다.
 
+설계 판단의 근거와 재현 절차는 별도 문서로 정리했다:
+**[MCP 서버 설계·구현 매뉴얼](docs/mcp-server-guide.md)** — 도구 경계 정하기,
+설명 쓰는 법, 응답 설계, 계측, 배포, 출시 전 점검표.
+
 ### Claude Desktop 연결
 
 `claude_desktop_config.json` (macOS `~/Library/Application Support/Claude/`,
@@ -160,7 +164,7 @@ INT8 벤치마크(344ms/청크)와 맞물려 **벡터 지연 = 임베딩 비용*
 cp .env.example .env          # DART_API_KEY 발급 후 입력
 docker compose up -d          # Oracle + Neo4j + pgvector + Airflow
 uv sync --extra dev --extra graph --extra rag --extra mcp
-uv run pytest                 # 단위 테스트 65건 (DB 불필요)
+uv run pytest                 # 단위 테스트 70건 (DB 불필요)
 ```
 
 파이프라인 순서:
@@ -192,7 +196,7 @@ uv run python -m kograph.rag.evaluate
 
 코드가 있는 것과 검증된 것은 다르므로 구분해 적는다.
 
-**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 65건), 지식그래프 적재,
+**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 70건), 지식그래프 적재,
 하이브리드 검색 + 30문항 평가, MCP 서버(stdio·HTTP 양쪽 클라이언트 왕복),
 ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측.
 

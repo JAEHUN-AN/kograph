@@ -6,6 +6,8 @@ pgvector, Oracle)는 통합 검증에서 별도로 확인한다.
 
 from datetime import date
 
+import anyio
+
 from kograph.mcp_server.server import (
     _format_price_row,
     _relation_sort_key,
@@ -81,6 +83,29 @@ class TestServerMetadata:
         """모델이 도구를 고를 근거가 instructions에 있어야 한다."""
         assert "get_company_relations" in mcp.instructions
         assert "search_filings" in mcp.instructions
+
+    def test_all_tools_are_registered(self):
+        """@mcp.tool() 데코레이터는 조용히 빠진다. 잃어버려도 코드는
+        멀쩡히 돌고 도구만 사라지므로 개수와 이름을 못 박아둔다."""
+        names = {t.name for t in anyio.run(mcp.list_tools)}
+
+        assert names == {
+            "list_companies",
+            "get_company_relations",
+            "find_connection",
+            "search_filings",
+            "get_price_series",
+            "graph_overview",
+        }
+
+    def test_every_tool_description_states_when_to_call(self):
+        """설명이 곧 라우팅 로직이다. '무엇을 하는지'만 있으면 모델이
+        도구를 안 고른다."""
+        for tool in anyio.run(mcp.list_tools):
+            assert tool.description, f"{tool.name}에 설명이 없다"
+            assert "호출한다" in tool.description, (
+                f"{tool.name} 설명에 호출 조건이 없다"
+            )
 
 
 class TestFormatPriceRow:
