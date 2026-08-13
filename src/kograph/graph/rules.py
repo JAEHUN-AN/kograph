@@ -60,12 +60,13 @@ def _field(lines: list[str], *labels: str, after: str | None = None) -> str | No
 
     for label in labels:
         idx = _find_label(lines, (label,), start)
-        if idx is None:
+        if idx is None or idx + 1 >= len(lines):
             continue
-        for j in range(idx + 1, min(idx + 3, len(lines))):
-            value = lines[j].strip()
-            if value and value not in _EMPTY_VALUES:
-                return value
+        # 값은 반드시 '바로 다음 줄'이다. 본문은 빈 줄이 제거된 상태이므로
+        # 앞으로 스캔하면 비공개('-') 항목에서 다음 '라벨'을 값으로 집는다.
+        value = lines[idx + 1].strip()
+        if value and value not in _EMPTY_VALUES and _norm(value) not in _FORM_LABELS:
+            return value
     return None
 
 
@@ -114,11 +115,17 @@ def _strip_trailing_paren(name: str | None) -> str | None:
 # 등장하므로, 그것까지 받으면 관계 값을 자회사 상호로 오인한다.
 _SECTION_HEADER = re.compile(r"^\d+\s*\.\s+\S")
 
-# 표 머리글이 값 자리에 오는 경우를 걸러내는 안전망 (섹션 범위 제한의 보조)
+# 값 자리에 라벨이 오는 경우를 걸러내는 안전망.
+# 일부 공시는 라벨을 먼저 모아 나열하고 값을 뒤에 붙이는 표 레이아웃을 쓴다.
+# 그 변형까지 파싱하기보다, 라벨을 값으로 채택하지 않는 쪽이 안전하다 —
+# 관계 하나를 놓치는 것보다 없는 사실을 그래프에 넣는 쪽이 나쁘다.
 _FORM_LABELS = frozenset({
     "성명", "생년월일", "생년월일 또는 사업자등록번호", "성별", "국내외 구분", "국적",
     "최대주주 및 발행회사와의 관계", "겸직내용1", "겸직내용2",
     "변경일", "변경원인", "주식의 종류", "변경전주식수", "증감주식수", "변경후주식수", "비고",
+    "최근 매출액(원)", "최근매출액(원)", "주요사업", "회사와의 관계", "회사와 관계",
+    "매출액대비(%)", "매출액 대비(%)", "자기자본(원)", "자기자본대비(%)",
+    "회사와 최근 3년간 동종계약 이행여부", "대규모법인여부", "대기업해당여부",
 })
 
 

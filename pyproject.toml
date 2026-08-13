@@ -18,7 +18,12 @@ dependencies = [
 [project.optional-dependencies]
 spark = ["pyspark>=3.5"]
 graph = ["neo4j>=5.23", "anthropic>=0.40"]
-rag = ["langgraph>=0.2", "langchain-anthropic>=0.2", "pgvector>=0.3", "psycopg[binary]>=3.2"]
+rag = [
+    "sentence-transformers>=3.0",  # 로컬 CPU 임베딩 (GPU 불필요)
+    "pgvector>=0.3",
+    "psycopg[binary]>=3.2",
+]
+agent = ["langgraph>=0.2", "langchain-anthropic>=0.2"]
 mcp = ["mcp>=1.1"]
 dev = ["pytest>=8.3", "pytest-cov>=5.0", "ruff>=0.6", "responses>=0.25"]
 

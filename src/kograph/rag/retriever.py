@@ -1,0 +1,160 @@
+"""하이브리드 리트리버: 벡터 검색 + 그래프 순회.
+
+실행: uv run python -m kograph.rag.retriever "한미반도체는 어디에 공급하나"
+
+- vector_search: 공시 청크 의미 검색. 답이 한 문서 안에 문장으로 적혀 있는
+                 질문에 강하다.
+- graph_search:  질문에서 회사명을 잡아 관계를 1~2홉 순회. "A에 납품하는 회사가
+                 또 어디에 납품하나"처럼 여러 공시를 이어야 답이 나오는 질문에 강하다.
+- hybrid_search: 둘을 합쳐 근거를 반환.
+
+두 축을 분리해 둔 이유는 평가 때 각각의 기여를 따로 재기 위해서다.
+"""
+
+import argparse
+import logging
+import re
+import sys
+from dataclasses import dataclass, field
+
+from neo4j import GraphDatabase
+
+from kograph.config import get_settings
+from kograph.rag.embed import connect_pg, embed_texts
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_K = 5
+MAX_HOPS = 2
+
+
+@dataclass
+class Evidence:
+    """검색 결과 한 건. 어느 축에서 나왔는지와 근거 공시를 항상 함께 남긴다."""
+
+    source: str            # "vector" | "graph"
+    text: str
+    rcept_no: str | None = None
+    score: float | None = None
+    entities: list[str] = field(default_factory=list)
+
+
+def vector_search(question: str, k: int = DEFAULT_K) -> list[Evidence]:
+    """pgvector 코사인 최근접. 임베딩은 적재 때와 동일 모델·정규화를 쓴다."""
+    qvec = embed_texts([question])[0]
+    with connect_pg() as pg, pg.cursor() as cur:
+        cur.execute(
+            """SELECT rcept_no, corp_name, content,
+                      1 - (embedding <=> %s::vector) AS score
+               FROM doc_chunk
+               WHERE embedding IS NOT NULL
+               ORDER BY embedding <=> %s::vector
+               LIMIT %s""",
+            (qvec, qvec, k),
+        )
+        return [
+            Evidence(
+                source="vector",
+                text=content,
+                rcept_no=rcept_no.strip(),
+                score=float(score),
+                entities=[corp_name] if corp_name else [],
+            )
+            for rcept_no, corp_name, content, score in cur.fetchall()
+        ]
+
+
+def _driver():
+    s = get_settings()
+    return GraphDatabase.driver(s.neo4j_uri, auth=(s.neo4j_user, s.neo4j_password))
+
+
+def known_companies() -> list[str]:
+    """그래프에 존재하는 회사명 목록 (질문에서 엔티티를 잡을 때 사용)."""
+    with _driver() as d, d.session() as s:
+        return [r["name"] for r in s.run("MATCH (c:Company) RETURN c.name AS name")]
+
+
+def mentioned_companies(question: str, names: list[str] | None = None) -> list[str]:
+    """질문에 등장하는 회사명을 그래프 노드와 매칭.
+
+    NER 대신 사전 매칭을 쓴다 — 대상 노드가 수백 개로 한정적이고, 정확도가
+    NER보다 높으며 모델이 필요 없다. 부분 일치를 허용해 '하이닉스'로
+    'SK하이닉스(SK Hynix Inc.)'를 잡는다.
+    """
+    names = names if names is not None else known_companies()
+    q = re.sub(r"[\s()]+", "", question)
+    hits = []
+    for name in names:
+        key = re.sub(r"[\s()]+", "", name)
+        if len(key) < 2:
+            continue
+        if key in q or (len(key) >= 4 and key[:4] in q):
+            hits.append(name)
+    # 긴 이름을 우선 (더 구체적인 매칭)
+    return sorted(set(hits), key=len, reverse=True)
+
+
+def graph_search(question: str, hops: int = MAX_HOPS, limit: int = 25) -> list[Evidence]:
+    """질문 속 회사에서 출발해 관계를 순회하고, 경로를 문장으로 반환."""
+    seeds = mentioned_companies(question)
+    if not seeds:
+        return []
+
+    cypher = f"""
+        MATCH path = (a:Company)-[r*1..{hops}]-(b:Company)
+        WHERE a.name IN $seeds AND a <> b
+        RETURN [x IN relationships(path) | type(x)] AS rels,
+               [x IN relationships(path) | x.rcept_no] AS rcepts,
+               [n IN nodes(path) | n.name] AS names
+        LIMIT $limit
+    """
+    out: list[Evidence] = []
+    with _driver() as d, d.session() as s:
+        for rec in s.run(cypher, seeds=seeds[:3], limit=limit):
+            names, rels = rec["names"], rec["rels"]
+            hop_text = names[0]
+            for rel, name in zip(rels, names[1:], strict=True):
+                hop_text += f" -[{rel}]-> {name}"
+            rcepts = [r for r in rec["rcepts"] if r]
+            out.append(Evidence(
+                source="graph",
+                text=hop_text,
+                rcept_no=rcepts[0] if rcepts else None,
+                entities=list(names),
+            ))
+    return out
+
+
+def hybrid_search(question: str, k: int = DEFAULT_K) -> list[Evidence]:
+    """벡터 + 그래프. 그래프 경로를 앞에 둔다 — 관계형 질문의 답이 여기 있다."""
+    return graph_search(question) + vector_search(question, k)
+
+
+def main() -> None:
+    p = argparse.ArgumentParser()
+    p.add_argument("question")
+    p.add_argument("--k", type=int, default=DEFAULT_K)
+    p.add_argument("--mode", choices=["vector", "graph", "hybrid"], default="hybrid")
+    args = p.parse_args()
+
+    fn = {"vector": lambda q: vector_search(q, args.k),
+          "graph": graph_search,
+          "hybrid": lambda q: hybrid_search(q, args.k)}[args.mode]
+
+    results = fn(args.question)
+    if not results:
+        print("(근거 없음)")
+        sys.exit(0)
+    for i, ev in enumerate(results, 1):
+        head = f"[{i}] ({ev.source}"
+        head += f", {ev.score:.3f})" if ev.score is not None else ")"
+        body = ev.text if ev.source == "graph" else ev.text.replace("\n", " ")[:160]
+        print(f"{head} {body}")
+        if ev.rcept_no:
+            print(f"     근거공시: {ev.rcept_no}")
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.WARNING)
+    main()

@@ -17,6 +17,7 @@ from neo4j import GraphDatabase
 
 from kograph.config import get_settings
 from kograph.db.oracle import connect
+from kograph.graph.names import canonical_name
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,14 @@ _CONSTRAINTS = [
     "FOR (c:Company) REQUIRE c.name IS UNIQUE",
 ]
 
+# 노드 키는 정규형, 원문 표기는 aliases에 누적한다 (출처 추적용).
 _MERGE_RELATION = """
 MERGE (s:Company {name: $subject})
+  SET s.aliases = CASE WHEN $subject_raw IN coalesce(s.aliases, [])
+                       THEN s.aliases ELSE coalesce(s.aliases, []) + $subject_raw END
 MERGE (o:Company {name: $object})
+  SET o.aliases = CASE WHEN $object_raw IN coalesce(o.aliases, [])
+                       THEN o.aliases ELSE coalesce(o.aliases, []) + $object_raw END
 MERGE (s)-[r:%s {rcept_no: $rcept_no}]->(o)
 SET r += $props
 """
@@ -43,9 +49,13 @@ def load_universe_companies(session) -> int:
         rows = cur.fetchall()
     for corp_name, corp_code, stock_code in rows:
         session.run(
-            "MERGE (c:Company {name: $name}) "
-            "SET c.corp_code = $corp_code, c.stock_code = $stock_code, c.in_universe = true",
-            name=corp_name, corp_code=corp_code, stock_code=stock_code,
+            """MERGE (c:Company {name: $name})
+               SET c.corp_code = $corp_code, c.stock_code = $stock_code,
+                   c.in_universe = true,
+                   c.aliases = CASE WHEN $raw IN coalesce(c.aliases, [])
+                                    THEN c.aliases ELSE coalesce(c.aliases, []) + $raw END""",
+            name=canonical_name(corp_name), raw=corp_name,
+            corp_code=corp_code, stock_code=stock_code,
         )
     return len(rows)
 
@@ -66,7 +76,9 @@ def load_triples(session) -> int:
         # predicate는 kg_triple에 Enum 값으로만 저장되므로 안전하게 포맷 가능
         session.run(
             _MERGE_RELATION % predicate,
-            subject=subject, object=obj, rcept_no=rcept_no, props=props,
+            subject=canonical_name(subject), subject_raw=subject,
+            object=canonical_name(obj), object_raw=obj,
+            rcept_no=rcept_no, props=props,
         )
         count += 1
     return count

@@ -127,6 +127,19 @@ class TestSupplyContract:
 
         assert parse("테스트소재", "단일판매ㆍ공급계약체결", text) == []
 
+    def test_rejects_label_in_value_position(self):
+        """라벨을 먼저 모아 나열하는 표 레이아웃에서 라벨을 거래처로 삼으면 안 된다."""
+        text = (
+            "단일판매ㆍ공급계약 체결\n"
+            "3. 계약상대방\n"
+            "- 최근 매출액(원)\n"
+            "- 주요사업\n"
+            "-\n"
+            "테스트해외법인\n"
+        )
+
+        assert parse("테스트소재", "단일판매ㆍ공급계약체결", text) == []
+
 
 class TestStakeAcquisition:
     def test_emits_invests_in_and_owns_stake(self):
