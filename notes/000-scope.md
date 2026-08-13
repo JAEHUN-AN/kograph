@@ -14,7 +14,7 @@
 ## 측정 예정 지표 (각 주차 1개 이상)
 
 - [ ] W1: 증분 ETL 소요시간 / pandas 대비 Spark 팩터 배치 처리 시간
-- [x] W2: 관계 추출 — 규칙 파서 406/509건(79.8%), 662 트리플, 0.4초, 0원 → [001](001-rule-vs-llm-extraction.md)
+- [x] W2: 관계 추출 — 규칙 파서 396/509건(77.8%), 642 트리플, 0.4초, 0원 → [001](001-rule-vs-llm-extraction.md)
 - [x] W2: vanilla RAG vs GraphRAG — 30문항 검색 recall 56% → 98% → [002](002-graphrag-vs-vector-eval.md)
 - [ ] W2: 관계 추출 정밀도 (수동 라벨 200건)
 - [x] W3: 임베딩 처리량 FP32 1.43 → INT8 2.91 chunks/s (2.03x), 가중치 4배 축소, 검색 품질 동일 → [003](003-onnx-int8-quantization.md)

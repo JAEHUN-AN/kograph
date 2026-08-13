@@ -1,93 +1,127 @@
 # kograph
 
-> GraphRAG agent & MCP server for Korean equity markets.
-> DART filings → knowledge graph → multi-hop financial reasoning.
+> 한국 주식시장 공시로 지식그래프를 만들고, LLM이 MCP 도구로 직접 조회하는
+> 금융 리서치 백엔드.
 
-한국 주식시장(반도체·2차전지 밸류체인)의 공시·시세 데이터를 수집하고,
-기업 간 관계(공급망·지분·임원 겸직)를 **지식그래프**로 구축하여,
-LLM이 **MCP 툴**로 자율 조회하며 multi-hop 질문에 답하는 금융 리서치 에이전트.
+반도체·2차전지 밸류체인 16개 종목의 DART 공시에서 기업 간 관계(공급·지분·
+채무보증·모자·임원)를 추출해 지식그래프를 만들고, 벡터 검색과 그래프 순회를
+함께 쓰는 하이브리드 리트리버 위에 MCP 서버를 올렸다.
 
-**왜 GraphRAG인가?** — *"삼성전자에 HBM 소재를 납품하는 2차 협력사 중 최근 분기
-실적이 개선된 곳은?"* 같은 질문은 벡터 유사도 검색으로 풀리지 않는다.
-그래프 2-hop 순회 + 재무 시계열 조인이 필요하다. 이 프로젝트는 vanilla RAG와
-GraphRAG를 동일 평가셋으로 정량 비교한다.
+## 왜 그래프인가
 
-## Architecture
+**한 회사의 관계는 여러 공시에 흩어져 있다.** 벡터 검색은 그중 하나가 담긴
+청크를 잘 찾지만 나머지를 놓친다. 그래서 "SK하이닉스에 납품하는 회사를 모두"
+같은 질문에 한 곳만 답한다.
 
-```
-DART OpenAPI ─┐                              ┌─ Neo4j (knowledge graph)
-pykrx (KRX) ──┼─ Airflow ─ Oracle 23ai ──────┤
-              │   (ETL)    (raw layer)       └─ pgvector (embeddings)
-              │                                     │
-              └─ PySpark (factor batch)             ▼
-                                     LangGraph hybrid retriever
-                                              │
-                                              ▼
-                                    FastMCP server ⇄ Claude
-                              (query_graph / search_filings / get_factors)
-```
+30문항 평가셋으로 재보니 이 차이가 recall에서 드러났다.
 
-## Roadmap
+| | hit@k | **recall** |
+|---|---|---|
+| vector only | 70% | **56%** |
+| graph only | 93% | **92%** |
+| hybrid | 100% | **98%** |
 
-- [x] **Week 1 — ETL 기반**: DART·KRX 수집기, Oracle 스키마, Airflow DAG, Spark 팩터 배치
-- [x] **Week 2 — 지식그래프 + RAG**: 규칙 기반 관계 추출 → Neo4j, 하이브리드 리트리버, 평가셋 30문항
-- [x] **Week 3a — MCP 서버**: 도구 6종, stdio 통합 검증
-- [x] **Week 3b — 임베딩 최적화**: ONNX INT8 양자화, CPU 처리량 2배
-- [x] **Week 4 — 서빙·관측**: 컨테이너화, Prometheus/Grafana, k8s 매니페스트, CI
+예상 밖은 **single-hop 질문에서도 그래프가 앞섰다**는 점(87% vs 93%)이다.
+홉 수가 아니라 **정답이 몇 개 문서에 흩어져 있는가**가 갈림길이었다.
+→ [기술노트 002](notes/002-graphrag-vs-vector-eval.md)
 
-측정 결과와 그 과정에서 잡은 결함은 [notes/](notes/)에 있다.
+## 측정 결과
 
-| 지표 | 값 |
+| 항목 | 값 | 근거 |
+|---|---|---|
+| 관계 추출 | 공시 396/509건(78%), 트리플 642개, **0.4초, 비용 0원** | [001](notes/001-rule-vs-llm-extraction.md) |
+| 검색 recall | vector 56% → **hybrid 98%** | [002](notes/002-graphrag-vs-vector-eval.md) |
+| 임베딩 처리량 | FP32 1.43 → **INT8 2.91 chunks/s**, 가중치 2,166 → **544MB**, 검색 품질 동일 | [003](notes/003-onnx-int8-quantization.md) |
+| 서빙 이미지 | 8.8GB → **913MB** | [004](notes/004-serving-deployment.md) |
+
+데이터 규모: 공시 2,192건 · 시세 21,284행 · 벡터 청크 8,934개 ·
+그래프 노드 184/관계 642.
+
+## 설계에서 갈렸던 지점 세 가지
+
+**1. 관계 추출에 LLM을 쓰지 않았다.** DART 주요사항보고서는 고정 양식이라
+라벨-값 구조가 일정하다. 이런 입력에서는 정규식 파서가 LLM보다 **정확하다** —
+환각이 없고 결정론적이다. LLM 경로(`graph/extract.py`)는 비정형 잔여분과 품질
+벤치마크용으로 남겨뒀다.
+
+**2. ONNX 자체는 오히려 느렸다.** "ONNX로 바꾸면 빨라진다"는 기대와 달리
+ONNX FP32는 torch보다 11% 느렸다(1.27 vs 1.43 chunks/s). 이득은 전부
+**양자화**에서 나왔다. 여기서 측정을 멈췄다면 성능을 떨어뜨린 채 개선했다고
+보고했을 것이다.
+
+**3. 양자화 이득이 배포까지 이어졌다.** INT8 추론은 onnxruntime만 있으면 되므로
+서빙 이미지에서 PyTorch를 통째로 뺄 수 있었다(8.8GB → 913MB). 학습 스택은
+모델을 *만들 때* 필요하지 *쓸 때* 필요하지 않다.
+
+## 만들면서 잡은 결함
+
+측정과 검증이 실제로 무엇을 잡아냈는지가 이 프로젝트의 핵심이다.
+
+| 결함 | 어떻게 드러났나 |
 |---|---|
-| 관계 추출 | 공시 396/509건, 트리플 642개, 0.4초, 비용 0원 ([001](notes/001-rule-vs-llm-extraction.md)) |
-| 검색 recall | vector 56% → hybrid 98% ([002](notes/002-graphrag-vs-vector-eval.md)) |
-| 지식그래프 | 노드 184, 관계 642 |
-| 벡터 인덱스 | 공시 2,178건 → 8,934 청크 (bge-m3, CPU) |
-| 임베딩 처리량 | FP32 1.43 → INT8 2.91 chunks/s, 가중치 2,166 → 544 MB, 검색 품질 동일 ([003](notes/003-onnx-int8-quantization.md)) |
-| 서빙 이미지 | 8.8GB → 913MB (학습 스택 제거) ([004](notes/004-serving-deployment.md)) |
+| 채무보증액 대신 **차입 원금**을 기록 | 단위 테스트 (다중 라벨 우선순위 버그) |
+| `처분결정`에 `INVESTS_IN` 부여 — **사실과 정반대** | 코드 리뷰 |
+| 표 머리글 `생년월일 또는 사업자등록번호`가 **최다 연결 노드** | 적재 후 그래프 통계 점검 |
+| `SK하이닉스`와 `SK하이닉스(SK Hynix Inc.)`가 별개 노드 → **2-hop 단절** | 그래프 점검 |
+| 관계 방향이 뒤집혀 렌더 (`A -[OFFICER_OF]-> 사람`) | MCP 클라이언트 왕복 출력 확인 |
+| 허브 노드에서 정답이 `LIMIT` 밖으로 밀려남 (702경로 중 223번째) | 평가셋 실패 4문항 추적 |
+
+마지막 두 건은 **단위 테스트로는 잡히지 않았다.** 실제 출력을 읽고 적재 후
+통계를 확인해야 보였다.
+
+## 아키텍처
+
+```
+DART OpenAPI ─┐
+              ├─ Airflow ─→ Oracle 23ai ─┬─→ 규칙 파서 ─→ Neo4j (그래프)
+pykrx (KRX) ──┘   (증분 ETL)  (원천)      └─→ 청킹+임베딩 ─→ pgvector
+                                                    │
+                                    하이브리드 리트리버 (벡터 + 그래프 순회)
+                                                    │
+                                          MCP 서버 (stdio / HTTP)
+                                                    │
+                                    Claude Desktop        Prometheus ─ Grafana
+```
 
 ## MCP 서버
 
-공시 지식그래프를 LLM이 직접 조회하도록 도구로 노출한다.
-
 ```bash
-uv run python -m kograph.mcp_server.server   # stdio
-uv run python scripts/verify_mcp.py          # 클라이언트로 왕복 검증
+uv run python -m kograph.mcp_server.server                     # stdio
+uv run python -m kograph.mcp_server.server --transport http    # 컨테이너 배포
+uv run python scripts/verify_mcp.py                            # 클라이언트 왕복 검증
 ```
 
-| 도구 | 언제 쓰나 |
+| 도구 | 언제 호출되나 |
 |---|---|
 | `graph_overview` | 데이터에 뭐가 있는지 모를 때 |
 | `list_companies` | 조회 가능한 종목·섹터 확인 |
-| `get_company_relations` | 공급·지분·보증·모자 관계 조회 (1~2홉) |
-| `find_connection` | 두 회사가 어떻게 엮이는지, 공통 거래처 |
+| `get_company_relations` | 공급·지분·보증·모자 관계 (1~2홉) |
+| `find_connection` | 두 회사의 연결 경로·공통 거래처 |
 | `search_filings` | 계약 조건·투자 목적 등 서술형 내용 |
 | `get_price_series` | 일별 시세·기간 수익률 |
 
-모든 결과에 근거 공시번호가 붙어 모델이 출처를 인용할 수 있다.
+**모든 결과에 근거 공시번호가 붙는다.** 금융 도메인에서 출처를 못 대는 답변은
+쓸 수 없다. 도구 설명에는 "무엇을 하는지"가 아니라 **"언제 호출해야 하는지"**를
+적었다 — 최신 모델일수록 도구를 보수적으로 고르기 때문이다.
 
 ### Claude Desktop 연결
 
-`claude_desktop_config.json`에 추가한다 (macOS는
-`~/Library/Application Support/Claude/`, Windows는 `%APPDATA%\Claude\`).
+`claude_desktop_config.json` (macOS `~/Library/Application Support/Claude/`,
+Windows `%APPDATA%\Claude\`):
 
 ```json
 {
   "mcpServers": {
     "kograph": {
       "command": "uv",
-      "args": ["--directory", "C:\\workspace\\kograph",
+      "args": ["--directory", "/path/to/kograph",
                "run", "python", "-m", "kograph.mcp_server.server"]
     }
   }
 }
 ```
 
-`docker compose up -d`로 DB가 떠 있어야 한다.
-
 ## 배포와 관측
-
-서버를 HTTP로 띄우면 `/healthz`(liveness)와 `/metrics`(Prometheus)가 함께 열린다.
 
 ```bash
 docker compose up -d kograph-mcp prometheus grafana
@@ -96,42 +130,88 @@ uv run python scripts/verify_http.py   # 헬스체크·메트릭·카운터 증�
 
 | 주소 | 용도 |
 |---|---|
-| http://localhost:8000/mcp | MCP (streamable-http) |
-| http://localhost:8000/metrics | Prometheus 메트릭 |
-| http://localhost:9090 | Prometheus |
-| http://localhost:3001 | Grafana (대시보드 자동 프로비저닝) |
+| `:8000/mcp` | MCP (streamable-http) |
+| `:8000/metrics` | Prometheus 메트릭 |
+| `:9090` | Prometheus |
+| `:3001` | Grafana (대시보드 자동 프로비저닝) |
 
-서빙 이미지는 학습 스택(torch·sentence-transformers)을 뺀 **913MB**다. 추론은
-ONNX INT8로 하므로 PyTorch가 필요 없고, Dockerfile과 CI 양쪽에서 torch가
-섞여 들어오지 않았는지 검사한다.
+계측은 볼 것만 골랐다. 그중 **검색 축별 반환 건수**가 중요한데, 색인이 비면
+검색은 *빠르게* 아무것도 못 찾아서 지연 대시보드만 보면 오히려 건강해 보이기
+때문이다.
 
-쿠버네티스 배포:
+실측(컨테이너): 그래프 순회 p95 **48ms**, 벡터 검색 p95 **248ms**. 후자가
+INT8 벤치마크(344ms/청크)와 맞물려 **벡터 지연 = 임베딩 비용**임을 보여준다.
 
-```bash
-kubectl kustomize k8s/          # 렌더 확인
-kubectl apply -k k8s/           # 적용 (Secret은 실값으로 교체 후)
-```
+`/healthz`는 프로세스만 확인하고 DB를 건드리지 않는다. 의존 서비스까지
+검사하면 DB가 잠깐 흔들릴 때 쿠버네티스가 멀쩡한 파드를 재시작한다.
 
 ## Quick start
 
 ```bash
-cp .env.example .env         # DART_API_KEY 등 입력
+cp .env.example .env          # DART_API_KEY 발급 후 입력
 docker compose up -d          # Oracle + Neo4j + pgvector + Airflow
-uv sync --extra dev           # 또는: pip install -e ".[dev]"
-pytest                        # 단위 테스트
+uv sync --extra dev --extra graph --extra rag --extra mcp
+uv run pytest                 # 단위 테스트 63건 (DB 불필요)
 ```
 
-Airflow UI: http://localhost:8081 (admin/admin) — `dart_filings`, `krx_prices` DAG 활성화.
+파이프라인 순서:
 
-## Stack
+```bash
+# 1. 수집 — Airflow UI(:8081, admin/admin)에서 dart_filings, krx_prices 실행
+# 2. 공시 본문
+uv run python -m kograph.pipelines.doc_text
+# 3. 관계 추출 → 그래프
+uv run python -m kograph.graph.rules
+uv run python -m kograph.graph.load_neo4j
+# 4. 임베딩 → pgvector
+uv run python -m kograph.rag.embed
+# 5. 평가
+uv run python -m kograph.rag.evaluate
+```
 
-Python 3.12 · Airflow 2.10 · Oracle 23ai Free · PySpark · Neo4j 5 · pgvector ·
-LangGraph · FastMCP · Claude API
+## 기술 스택
 
-## Data sources
+| 계층 | 사용 |
+|---|---|
+| 수집·오케스트레이션 | Airflow 2.10, DART OpenAPI, pykrx |
+| 저장 | Oracle 23ai Free(원천), Neo4j 5(그래프), pgvector(임베딩) |
+| 검색 | bge-m3 임베딩(ONNX INT8, CPU), 자체 하이브리드 리트리버 |
+| 서빙 | MCP SDK 2.0, Starlette/uvicorn |
+| 운영 | Docker, Prometheus, Grafana, Kubernetes(kustomize), GitHub Actions |
 
-- [DART OpenAPI](https://opendart.fss.or.kr) — 공시 (금융감독원)
+## 범위와 한계
+
+코드가 있는 것과 검증된 것은 다르므로 구분해 적는다.
+
+**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 63건), 지식그래프 적재,
+하이브리드 검색 + 30문항 평가, MCP 서버(stdio·HTTP 양쪽 클라이언트 왕복),
+ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측.
+
+**코드만 있고 미검증** — PySpark 팩터 배치(작성만, 미실행), LLM 관계 추출
+(API 크레딧 부족으로 미실행), k8s 매니페스트(kustomize 렌더까지만, 클러스터
+미적용).
+
+**알려진 한계** — 파서가 못 읽은 공시 113건의 관계는 그래프에 없고, 어떤
+리트리버도 없는 사실은 찾지 못한다. 평가셋 30문항은 작고 정답을 같은
+그래프에서 도출했으므로 hybrid 98%는 "이 시스템이 금융 질문을 다 푼다"가
+아니라 **"적재된 관계에 대한 질문이면 회수해 온다"**는 뜻이다.
+
+## 기술노트
+
+| | |
+|---|---|
+| [000](notes/000-scope.md) | 스코프와 제약 정의 (GPU 없음 → 최적화 축 이동) |
+| [001](notes/001-rule-vs-llm-extraction.md) | 관계 추출: LLM 대신 규칙 파서를 택한 이유 |
+| [002](notes/002-graphrag-vs-vector-eval.md) | GraphRAG vs vanilla RAG 검색 성능 실측 |
+| [003](notes/003-onnx-int8-quantization.md) | ONNX INT8 양자화: 처리량 2배, 품질 손실 0 |
+| [004](notes/004-serving-deployment.md) | 서빙 배포와 관측: 이미지 8.8GB → 913MB |
+
+## 데이터 출처
+
+- [DART OpenAPI](https://opendart.fss.or.kr) — 전자공시 (금융감독원)
 - [pykrx](https://github.com/sharebook-kr/pykrx) — KRX 시세
+
+공개된 전자공시 정보만 사용하며, 투자 판단의 근거로 쓸 수 없다.
 
 ## License
 
