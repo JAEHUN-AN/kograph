@@ -30,11 +30,58 @@ pykrx (KRX) ──┼─ Airflow ─ Oracle 23ai ──────┤
 ## Roadmap
 
 - [x] **Week 1 — ETL 기반**: DART·KRX 수집기, Oracle 스키마, Airflow DAG, Spark 팩터 배치
-- [ ] **Week 2 — 지식그래프 + RAG**: LLM 관계 추출 → Neo4j, 하이브리드 리트리버, 평가셋 30문항
-- [ ] **Week 3 — MCP 서버 + 최적화**: FastMCP 툴 4종, 임베딩 ONNX INT8, LLM 라우팅/캐싱
-- [ ] **Week 4 — MLOps**: k3s 배포, RAGAS 회귀평가 CI, Prometheus/Grafana
+- [x] **Week 2 — 지식그래프 + RAG**: 규칙 기반 관계 추출 → Neo4j, 하이브리드 리트리버, 평가셋 30문항
+- [x] **Week 3a — MCP 서버**: 도구 6종, stdio 통합 검증
+- [ ] **Week 3b — 최적화**: 임베딩 ONNX INT8, LLM 라우팅/캐싱
+- [ ] **Week 4 — MLOps**: k3s 배포, 회귀평가 CI, Prometheus/Grafana
 
-성능·비용 최적화 실측 기록은 [notes/](notes/)에 있다.
+측정 결과와 그 과정에서 잡은 결함은 [notes/](notes/)에 있다.
+
+| 지표 | 값 |
+|---|---|
+| 관계 추출 | 공시 396/509건, 트리플 642개, 0.4초, 비용 0원 ([001](notes/001-rule-vs-llm-extraction.md)) |
+| 검색 recall | vector 56% → hybrid 98% ([002](notes/002-graphrag-vs-vector-eval.md)) |
+| 지식그래프 | 노드 184, 관계 642 |
+| 벡터 인덱스 | 공시 2,178건 → 8,934 청크 (bge-m3, CPU) |
+
+## MCP 서버
+
+공시 지식그래프를 LLM이 직접 조회하도록 도구로 노출한다.
+
+```bash
+uv run python -m kograph.mcp_server.server   # stdio
+uv run python scripts/verify_mcp.py          # 클라이언트로 왕복 검증
+```
+
+| 도구 | 언제 쓰나 |
+|---|---|
+| `graph_overview` | 데이터에 뭐가 있는지 모를 때 |
+| `list_companies` | 조회 가능한 종목·섹터 확인 |
+| `get_company_relations` | 공급·지분·보증·모자 관계 조회 (1~2홉) |
+| `find_connection` | 두 회사가 어떻게 엮이는지, 공통 거래처 |
+| `search_filings` | 계약 조건·투자 목적 등 서술형 내용 |
+| `get_price_series` | 일별 시세·기간 수익률 |
+
+모든 결과에 근거 공시번호가 붙어 모델이 출처를 인용할 수 있다.
+
+### Claude Desktop 연결
+
+`claude_desktop_config.json`에 추가한다 (macOS는
+`~/Library/Application Support/Claude/`, Windows는 `%APPDATA%\Claude\`).
+
+```json
+{
+  "mcpServers": {
+    "kograph": {
+      "command": "uv",
+      "args": ["--directory", "C:\\workspace\\kograph",
+               "run", "python", "-m", "kograph.mcp_server.server"]
+    }
+  }
+}
+```
+
+`docker compose up -d`로 DB가 떠 있어야 한다.
 
 ## Quick start
 

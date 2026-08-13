@@ -1,0 +1,235 @@
+"""kograph MCP 서버 — 공시 지식그래프를 LLM이 직접 조회하게 노출한다.
+
+실행(stdio): uv run python -m kograph.mcp_server.server
+
+도구 설계 원칙:
+1. 설명에 "무엇을 하는지"가 아니라 **"언제 호출해야 하는지"**를 쓴다.
+   최신 모델일수록 도구를 보수적으로 고르므로, 호출 조건이 명시된 설명이
+   실제 호출률을 좌우한다.
+2. 모든 결과에 **근거 공시번호**를 붙인다. 모델이 출처를 인용할 수 있어야
+   금융 도메인에서 쓸 수 있다.
+3. 결과는 토큰 효율을 위해 압축된 텍스트로 돌려준다. 원본 JSON 덤프는
+   컨텍스트만 먹고 가독성이 낮다.
+"""
+
+import csv
+import logging
+from datetime import date
+from pathlib import Path
+
+from mcp.server.mcpserver import MCPServer
+
+from kograph.db.oracle import connect as oracle_connect
+from kograph.rag.retriever import graph_search, known_companies, vector_search
+
+logger = logging.getLogger(__name__)
+
+UNIVERSE_CSV = Path("data/universe/universe_seed.csv")
+MAX_LIMIT = 20
+MAX_PRICE_ROWS = 250
+
+mcp = MCPServer(
+    name="kograph",
+    instructions=(
+        "한국 반도체·2차전지 밸류체인의 공시 지식그래프. 기업 간 공급·지분·"
+        "채무보증·모자 관계와 공시 본문, 일별 시세를 조회할 수 있다. "
+        "관계를 묻는 질문은 get_company_relations 또는 find_connection을, "
+        "계약 조건·투자 목적처럼 서술형 내용은 search_filings를 쓴다."
+    ),
+)
+
+
+def _universe_rows() -> list[dict]:
+    if not UNIVERSE_CSV.exists():
+        return []
+    with UNIVERSE_CSV.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _universe_names() -> list[str]:
+    return [r["corp_name"] for r in _universe_rows()]
+
+
+@mcp.tool()
+def list_companies() -> str:
+    """분석 대상 기업 목록과 섹터를 반환한다.
+
+    다른 도구를 호출하기 전에 **어떤 회사를 조회할 수 있는지 모를 때** 먼저
+    호출한다. 사용자가 이 목록 밖의 회사를 물으면 데이터 범위 밖임을 알려야 한다.
+    """
+    rows = _universe_rows()
+    if not rows:
+        return f"유니버스 파일을 찾을 수 없습니다: {UNIVERSE_CSV}"
+    lines = [f"분석 대상 {len(rows)}개 종목:"]
+    lines += [f"  {r['stock_code']}  {r['corp_name']} ({r['sector']})" for r in rows]
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def get_company_relations(company: str, hops: int = 1) -> str:
+    """한 기업의 거래·지배 관계를 그래프에서 조회한다.
+
+    **다음과 같은 질문에 호출한다**: 누가 누구에게 납품하는가, 지분을 누가
+    보유하는가, 자회사가 어디인가, 채무보증 대상이 어디인가. 관계가 여러
+    공시에 흩어져 있어도 그래프가 모아서 돌려주므로, 이런 질문에는
+    search_filings보다 이 도구가 정확하다.
+
+    hops=1은 직접 관계, hops=2는 "공급사의 다른 고객"처럼 한 다리 건넌
+    관계까지 포함한다. 먼저 1로 시도하고 부족할 때 2로 넓힌다.
+    """
+    hops = max(1, min(int(hops), 2))
+    evidences = graph_search(company, hops=hops)
+    if not evidences:
+        return (
+            f"'{company}'의 관계를 찾지 못했습니다. "
+            "list_companies로 조회 가능한 회사명을 확인하세요."
+        )
+    lines = [f"'{company}' 관련 관계 {len(evidences)}건 (hops={hops}):"]
+    for ev in evidences:
+        cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
+        lines.append(f"  {ev.text}{cite}")
+    return "\n".join(lines)
+
+
+def _shared_partners(evidences, a_key: str, b_key: str) -> set[str]:
+    """두 회사가 각각 연결된 상대의 교집합 (직접 경로가 없을 때의 차선책)."""
+    a_side: set[str] = set()
+    b_side: set[str] = set()
+    for ev in evidences:
+        names = [e.replace(" ", "") for e in ev.entities]
+        if any(a_key in n for n in names):
+            a_side.update(ev.entities)
+        if any(b_key in n for n in names):
+            b_side.update(ev.entities)
+    shared = a_side & b_side
+    return {
+        s for s in shared
+        if a_key not in s.replace(" ", "") and b_key not in s.replace(" ", "")
+    }
+
+
+@mcp.tool()
+def find_connection(company_a: str, company_b: str) -> str:
+    """두 기업이 어떻게 연결되는지 경로를 찾는다.
+
+    **"A와 B가 관계가 있나", "둘의 공통 거래처는", "A가 B에 간접적으로
+    엮여 있나" 같은 질문에 호출한다.** 두 회사를 각각 조회해 사용자가 직접
+    대조하게 두지 말고, 이 도구로 연결 경로를 확인한다.
+    """
+    evidences = graph_search(f"{company_a} {company_b}", hops=2)
+    a_key, b_key = company_a.replace(" ", ""), company_b.replace(" ", "")
+    linked = [
+        ev for ev in evidences
+        if any(a_key in e.replace(" ", "") for e in ev.entities)
+        and any(b_key in e.replace(" ", "") for e in ev.entities)
+    ]
+    if not linked:
+        shared = _shared_partners(evidences, a_key, b_key)
+        if shared:
+            return (
+                f"'{company_a}'와 '{company_b}'의 직접 경로는 없지만 "
+                f"공통 상대가 있습니다: {', '.join(sorted(shared))}"
+            )
+        return f"'{company_a}'와 '{company_b}'를 잇는 경로를 찾지 못했습니다."
+    lines = [f"'{company_a}' - '{company_b}' 연결 {len(linked)}건:"]
+    for ev in linked:
+        cite = f"  [공시 {ev.rcept_no}]" if ev.rcept_no else ""
+        lines.append(f"  {ev.text}{cite}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+def search_filings(query: str, limit: int = 5) -> str:
+    """공시 본문을 의미 검색한다.
+
+    **관계가 아니라 서술형 내용을 물을 때 호출한다** — 계약 조건, 투자 목적,
+    금액 산정 근거, 공시에 문장으로 적힌 배경 설명 등. 기업 간 관계 자체를
+    묻는 질문이면 get_company_relations가 더 정확하다.
+    """
+    limit = max(1, min(int(limit), MAX_LIMIT))
+    evidences = vector_search(query, k=limit)
+    if not evidences:
+        return f"'{query}'에 해당하는 공시 내용을 찾지 못했습니다."
+    lines = [f"'{query}' 관련 공시 {len(evidences)}건:"]
+    for ev in evidences:
+        body = " ".join(ev.text.split())[:400]
+        lines.append(f"\n[공시 {ev.rcept_no}] (유사도 {ev.score:.3f})\n{body}")
+    return "\n".join(lines)
+
+
+def _format_price_row(trade_date, close, volume, change_rate) -> str:
+    row = f"  {trade_date:%Y-%m-%d}  종가 {close:>9,}  거래량 {volume:>12,}"
+    return f"{row}  {change_rate:+.2f}%" if change_rate is not None else row
+
+
+@mcp.tool()
+def get_price_series(stock_code: str, start_date: str, end_date: str) -> str:
+    """종목의 일별 시세를 조회한다 (날짜는 YYYY-MM-DD).
+
+    **주가 추이·수익률·거래량을 묻는 질문에 호출한다.** 관계 질문에 이어
+    "그 계약 이후 주가가 어땠나" 같은 후속 질문이 나오면 여기서 확인한다.
+    기간이 길면 앞뒤 일부만 반환하므로, 특정 구간을 보려면 범위를 좁혀 호출한다.
+    """
+    code = stock_code.strip().zfill(6)
+    try:
+        begin, end = date.fromisoformat(start_date), date.fromisoformat(end_date)
+    except ValueError:
+        return "날짜는 YYYY-MM-DD 형식이어야 합니다 (예: 2026-01-31)."
+    if begin > end:
+        return "start_date가 end_date보다 늦습니다."
+
+    with oracle_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """SELECT trade_date, close_price, volume, change_rate
+               FROM price_daily
+               WHERE stock_code = :code AND trade_date BETWEEN :b AND :e
+               ORDER BY trade_date""",
+            code=code, b=begin, e=end,
+        )
+        rows = cur.fetchall()
+
+    if not rows:
+        return f"{code}의 {start_date}~{end_date} 시세가 없습니다."
+
+    first_close, last_close = rows[0][1], rows[-1][1]
+    change = (last_close / first_close - 1) * 100 if first_close else 0.0
+    out = [
+        f"{code} 시세 {len(rows)}거래일 ({rows[0][0]:%Y-%m-%d} ~ {rows[-1][0]:%Y-%m-%d})",
+        f"기간 수익률 {change:+.1f}% ({first_close:,} -> {last_close:,})",
+    ]
+    shown = rows if len(rows) <= MAX_PRICE_ROWS else rows[:10] + rows[-10:]
+    if len(rows) > MAX_PRICE_ROWS:
+        out.append(f"(전체 {len(rows)}행 중 앞뒤 10행만 표시)")
+    out += [_format_price_row(*r) for r in shown]
+    return "\n".join(out)
+
+
+@mcp.tool()
+def graph_overview() -> str:
+    """지식그래프에 어떤 회사와 관계가 들어 있는지 요약한다.
+
+    **"무엇을 물어볼 수 있나", "데이터에 뭐가 있나" 같은 탐색적 질문이나,
+    다른 도구가 빈 결과를 돌려줘 범위를 확인해야 할 때 호출한다.**
+    """
+    names = known_companies()
+    # 예시는 분석 대상 종목에서 뽑는다. 전체를 사전순으로 자르면 공시에 등장한
+    # 가칭 법인('(가칭) pCAM JV')이 앞을 채워 그래프를 오해하게 만든다.
+    seeds = _universe_names()
+    examples = [n for n in seeds if n in set(names)] or sorted(names)[:10]
+    return (
+        f"지식그래프: 회사 노드 {len(names)}개.\n"
+        "관계 유형: SUPPLIES_TO(공급), OWNS_STAKE(지분), INVESTS_IN(출자), "
+        "GUARANTEES_DEBT_OF(채무보증), SUBSIDIARY_OF(모자), OFFICER_OF(임원).\n"
+        "출처: DART 주요사항보고서 (반도체·2차전지 밸류체인, 최근 3년).\n"
+        f"분석 대상 종목: {', '.join(examples)}\n"
+        "이 밖에 거래상대·자회사로 등장한 법인이 함께 들어 있다."
+    )
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.WARNING)
+    mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

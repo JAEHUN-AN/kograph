@@ -99,10 +99,26 @@ _PATH_CYPHER = """
     MATCH path = (a:Company)-[r*{depth}..{depth}]-(b:Company)
     WHERE a.name IN $seeds AND a <> b
     RETURN DISTINCT [x IN relationships(path) | type(x)] AS rels,
+           [x IN relationships(path) | startNode(x).name] AS starts,
            [x IN relationships(path) | x.rcept_no] AS rcepts,
            [n IN nodes(path) | n.name] AS names
     LIMIT $limit
 """
+
+
+def _render_path(names: list[str], rels: list[str], starts: list[str]) -> str:
+    """경로를 방향까지 살려 문장으로 만든다.
+
+    순회는 무방향(-[r]-)이라 경로상의 다음 노드가 엣지의 끝점이 아닐 수 있다.
+    그때 화살표를 그대로 오른쪽으로 그리면 사실이 뒤집힌다
+    ('SK하이닉스 -[OFFICER_OF]-> 최태원'). 엣지의 실제 시작 노드와 대조해
+    역방향이면 왼쪽 화살표로 표기한다.
+    """
+    text = names[0]
+    for i, (rel, nxt) in enumerate(zip(rels, names[1:], strict=True)):
+        forward = starts[i] == names[i]
+        text += f" -[{rel}]-> {nxt}" if forward else f" <-[{rel}]- {nxt}"
+    return text
 
 
 def graph_search(question: str, hops: int = MAX_HOPS, limit: int = 60) -> list[Evidence]:
@@ -124,10 +140,8 @@ def graph_search(question: str, hops: int = MAX_HOPS, limit: int = 60) -> list[E
             if budget <= 0:
                 break
             for rec in s.run(_PATH_CYPHER.format(depth=depth), seeds=seeds[:3], limit=budget):
-                names, rels = rec["names"], rec["rels"]
-                hop_text = names[0]
-                for rel, name in zip(rels, names[1:], strict=True):
-                    hop_text += f" -[{rel}]-> {name}"
+                names, rels, starts = rec["names"], rec["rels"], rec["starts"]
+                hop_text = _render_path(names, rels, starts)
                 if hop_text in seen:  # 정정공시 탓에 같은 관계가 여러 엣지로 존재
                     continue
                 seen.add(hop_text)
