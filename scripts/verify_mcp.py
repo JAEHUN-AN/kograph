@@ -36,8 +36,11 @@ async def main() -> int:
     )
 
     async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
-        await session.initialize()
-        print(f"연결 성공: {(session.instructions or '')[:70]}...\n")
+        init = await session.initialize()
+        # 어떤 코드에 붙었는지 먼저 찍는다. stdio 서버는 핫 리로드되지 않아서,
+        # 고친 줄 알고 검증하다 옛 프로세스를 상대하는 일이 실제로 있었다.
+        print(f"연결 성공: {init.server_info.version}")
+        print(f"  {(session.instructions or '')[:70]}...\n")
 
         tools = await session.list_tools()
         print(f"등록된 도구 {len(tools.tools)}개:")

@@ -338,14 +338,32 @@ print(your_tool(...))
 
 ```python
 def _build_marker() -> str:
-    stamp = datetime.fromtimestamp(Path(__file__).stat().st_mtime)
-    return f"kograph {ver} (server.py {stamp:%Y-%m-%d %H:%M:%S})"
-
-# 시작 시 stderr로 남기고, /healthz 응답에도 넣는다
-logger.info("starting %s", _build_marker())
+    stamp = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=UTC)
+    return f"kograph {ver} (server.py {stamp:%Y-%m-%dT%H:%M:%SZ})"
 ```
 
-stderr여야 한다. stdout은 프로토콜 채널이다(위 항목 참고).
+**시각은 UTC로 고정한다.** 처음 지역 시간으로 찍었더니 같은 파일이 로컬 10:37,
+컨테이너 01:37로 보여서 환경 비교라는 본래 목적을 스스로 깨뜨렸다.
+
+**두는 자리가 더 중요하다.** `/healthz`에만 넣으면 HTTP에서만 보이는데, 낡음이
+정작 자주 생기는 곳은 stdio다. 프로토콜이 주는 자리에 넣으면 두 전송 모두에서
+클라이언트가 읽는다.
+
+```python
+mcp = MCPServer(name="kograph", version=_build_marker(), instructions=...)
+```
+
+```python
+init = await session.initialize()
+print(init.server_info.version)   # SDK 2.0은 snake_case (serverInfo 아님)
+# kograph 0.1.0 (server.py 2026-08-14T03:59:16Z)
+```
+
+시작 로그로도 남긴다. 단 **stderr여야 한다** — stdout은 프로토콜 채널이다.
+
+```python
+logger.info("starting %s", _build_marker())
+```
 
 HTTP 배포에서는 같은 문제가 다른 얼굴로 나타난다. 컨테이너는 이미지에 코드가
 구워져 있으므로 `docker compose up -d --build`로 **재빌드**해야 한다. 재시작만

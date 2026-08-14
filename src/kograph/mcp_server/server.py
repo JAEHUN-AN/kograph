@@ -34,8 +34,30 @@ UNIVERSE_CSV = Path("data/universe/universe_seed.csv")
 MAX_LIMIT = 20
 MAX_PRICE_ROWS = 250
 
+def _build_marker() -> str:
+    """실행 중인 코드가 언제 것인지 식별한다.
+
+    stdio 서버는 클라이언트가 띄운 하위 프로세스라, 소스를 고쳐도 그 프로세스가
+    살아 있는 한 옛 코드로 계속 답한다. 정적 버전(0.1.0)은 편집해도 그대로라
+    이걸 잡아내지 못하므로 소스 수정 시각을 함께 남긴다.
+
+    로컬과 컨테이너를 견주는 것이 이 값의 용도이므로 시각은 UTC로 고정한다.
+    지역 시간으로 찍으면 같은 파일이 로컬 10:37, 컨테이너 01:37로 보여
+    다른 코드라고 오해하게 된다.
+    """
+    try:
+        ver = version("kograph")
+    except PackageNotFoundError:  # 편집 설치가 아닌 경우
+        ver = "unknown"
+    stamp = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=UTC)
+    return f"kograph {ver} (server.py {stamp:%Y-%m-%dT%H:%M:%SZ})"
+
+
 mcp = MCPServer(
     name="kograph",
+    # serverInfo로 실려 stdio 클라이언트도 조회할 수 있다. /healthz는 HTTP
+    # 전용이라, 정작 낡음이 잘 생기는 stdio 경로에서는 확인할 방법이 없었다.
+    version=_build_marker(),
     instructions=(
         "한국 반도체·2차전지 밸류체인의 공시 지식그래프. 기업 간 공급·지분·"
         "채무보증·모자 관계와 공시 본문, 일별 시세를 조회할 수 있다. "
@@ -306,25 +328,6 @@ def graph_overview() -> str:
             f"분석 대상 종목: {', '.join(examples)}\n"
             "이 밖에 거래상대·자회사로 등장한 법인이 함께 들어 있다."
         )
-
-
-def _build_marker() -> str:
-    """실행 중인 코드가 언제 것인지 식별한다.
-
-    stdio 서버는 클라이언트가 띄운 하위 프로세스라, 소스를 고쳐도 그 프로세스가
-    살아 있는 한 옛 코드로 계속 답한다. 정적 버전(0.1.0)은 편집해도 그대로라
-    이걸 잡아내지 못하므로 소스 수정 시각을 함께 남긴다.
-
-    로컬과 컨테이너를 견주는 것이 이 값의 용도이므로 시각은 UTC로 고정한다.
-    지역 시간으로 찍으면 같은 파일이 로컬 10:37, 컨테이너 01:37로 보여
-    다른 코드라고 오해하게 된다.
-    """
-    try:
-        ver = version("kograph")
-    except PackageNotFoundError:  # 편집 설치가 아닌 경우
-        ver = "unknown"
-    stamp = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=UTC)
-    return f"kograph {ver} (server.py {stamp:%Y-%m-%dT%H:%M:%SZ})"
 
 
 @mcp.custom_route("/healthz", methods=["GET"])
