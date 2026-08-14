@@ -16,7 +16,8 @@ import argparse
 import csv
 import logging
 import os
-from datetime import date
+from datetime import UTC, date, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -307,6 +308,25 @@ def graph_overview() -> str:
         )
 
 
+def _build_marker() -> str:
+    """실행 중인 코드가 언제 것인지 식별한다.
+
+    stdio 서버는 클라이언트가 띄운 하위 프로세스라, 소스를 고쳐도 그 프로세스가
+    살아 있는 한 옛 코드로 계속 답한다. 정적 버전(0.1.0)은 편집해도 그대로라
+    이걸 잡아내지 못하므로 소스 수정 시각을 함께 남긴다.
+
+    로컬과 컨테이너를 견주는 것이 이 값의 용도이므로 시각은 UTC로 고정한다.
+    지역 시간으로 찍으면 같은 파일이 로컬 10:37, 컨테이너 01:37로 보여
+    다른 코드라고 오해하게 된다.
+    """
+    try:
+        ver = version("kograph")
+    except PackageNotFoundError:  # 편집 설치가 아닌 경우
+        ver = "unknown"
+    stamp = datetime.fromtimestamp(Path(__file__).stat().st_mtime, tz=UTC)
+    return f"kograph {ver} (server.py {stamp:%Y-%m-%dT%H:%M:%SZ})"
+
+
 @mcp.custom_route("/healthz", methods=["GET"])
 async def healthz(_request: Request) -> JSONResponse:
     """liveness probe — 의존 서비스는 확인하지 않는다.
@@ -314,7 +334,7 @@ async def healthz(_request: Request) -> JSONResponse:
     DB까지 검사하면 Oracle이 잠깐 흔들릴 때 쿠버네티스가 멀쩡한 파드를
     재시작한다. 준비 상태는 readiness로 따로 다뤄야 한다.
     """
-    return JSONResponse({"status": "ok", "service": "kograph"})
+    return JSONResponse({"status": "ok", "service": "kograph", "build": _build_marker()})
 
 
 @mcp.custom_route("/metrics", methods=["GET"])
@@ -333,6 +353,8 @@ def main() -> None:
     args = parser.parse_args()
 
     set_embed_backend(os.getenv("KOGRAPH_EMBED_BACKEND", "torch"))
+    # stderr로만 남긴다. stdio 전송에서 stdout은 프로토콜 채널이다.
+    logger.info("starting %s", _build_marker())
 
     if args.transport == "stdio":
         mcp.run(transport="stdio")
