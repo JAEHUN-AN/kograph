@@ -170,19 +170,28 @@ def find_connection(company_a: str, company_b: str) -> str:
 
 
 @mcp.tool()
-def search_filings(query: str, limit: int = 5) -> str:
+def search_filings(query: str, limit: int = 5, company: str | None = None) -> str:
     """공시 본문을 의미 검색한다.
 
     **관계가 아니라 서술형 내용을 물을 때 호출한다** — 계약 조건, 투자 목적,
     금액 산정 근거, 공시에 문장으로 적힌 배경 설명 등. 기업 간 관계 자체를
     묻는 질문이면 get_company_relations가 더 정확하다.
+
+    **특정 회사의 공시를 원하면 company를 반드시 지정한다.** 의미 검색은
+    소유권을 구분하지 못해서, 회사명을 query에만 넣으면 같은 그룹 계열사의
+    공시가 섞여 들어온다.
     """
     with track_tool("search_filings"):
         limit = max(1, min(int(limit), MAX_LIMIT))
-        evidences = vector_search(query, k=limit)
+        evidences = vector_search(query, k=limit, company=company)
         if not evidences:
-            return f"'{query}'에 해당하는 공시 내용을 찾지 못했습니다."
-        lines = [f"'{query}' 관련 공시 {len(evidences)}건:"]
+            scope = f" ({company} 공시로 한정)" if company else ""
+            return (
+                f"'{query}'에 해당하는 공시 내용을 찾지 못했습니다{scope}. "
+                "list_companies로 회사명을 확인하거나 company 없이 다시 시도하세요."
+            )
+        scope = f" [{company} 한정]" if company else ""
+        lines = [f"'{query}' 관련 공시 {len(evidences)}건{scope}:"]
         for ev in evidences:
             body = " ".join(ev.text.split())[:400]
             lines.append(f"\n[공시 {ev.rcept_no}] (유사도 {ev.score:.3f})\n{body}")
@@ -194,6 +203,28 @@ def _format_price_row(trade_date, close, volume, change_rate) -> str:
     return f"{row}  {change_rate:+.2f}%" if change_rate is not None else row
 
 
+# 시세만 주면 "왜 움직였나"에 답할 수 없고, 모델은 자기 지식으로 지어낸다.
+# 같은 기간의 공시를 함께 주면 근거를 짚어 말할 수 있다.
+MAX_PERIOD_FILINGS = 30
+
+
+def _filings_in_period(cur, code: str, begin: date, end: date) -> list[tuple]:
+    """기간 내 공시 (rcept_dt는 DATE가 아니라 YYYYMMDD 문자열이다)."""
+    cur.execute(
+        """SELECT rcept_dt, report_nm, rcept_no
+           FROM filing
+           WHERE stock_code = :code AND rcept_dt BETWEEN :b AND :e
+           ORDER BY rcept_dt""",
+        code=code, b=begin.strftime("%Y%m%d"), e=end.strftime("%Y%m%d"),
+    )
+    return cur.fetchall()
+
+
+def _format_filing_row(rcept_dt: str, report_nm: str, rcept_no: str) -> str:
+    day = f"{rcept_dt[:4]}-{rcept_dt[4:6]}-{rcept_dt[6:]}"
+    return f"  {day}  {report_nm}  [공시 {rcept_no}]"
+
+
 @mcp.tool()
 def get_price_series(stock_code: str, start_date: str, end_date: str) -> str:
     """종목의 일별 시세를 조회한다 (날짜는 YYYY-MM-DD).
@@ -201,6 +232,10 @@ def get_price_series(stock_code: str, start_date: str, end_date: str) -> str:
     **주가 추이·수익률·거래량을 묻는 질문에 호출한다.** 관계 질문에 이어
     "그 계약 이후 주가가 어땠나" 같은 후속 질문이 나오면 여기서 확인한다.
     기간이 길면 앞뒤 일부만 반환하므로, 특정 구간을 보려면 범위를 좁혀 호출한다.
+
+    **같은 기간에 제출된 공시 목록을 함께 돌려준다.** "왜 올랐나/떨어졌나"를
+    물으면 그 날짜의 공시를 근거로 답한다. 공시가 없는 날의 등락은 원인을
+    추측하지 말고 확인할 수 없다고 말한다.
     """
     with track_tool("get_price_series"):
         code = stock_code.strip().zfill(6)
@@ -220,6 +255,7 @@ def get_price_series(stock_code: str, start_date: str, end_date: str) -> str:
                 code=code, b=begin, e=end,
             )
             rows = cur.fetchall()
+            filings = _filings_in_period(cur, code, begin, end)
 
         if not rows:
             return f"{code}의 {start_date}~{end_date} 시세가 없습니다."
@@ -234,6 +270,15 @@ def get_price_series(stock_code: str, start_date: str, end_date: str) -> str:
         if len(rows) > MAX_PRICE_ROWS:
             out.append(f"(전체 {len(rows)}행 중 앞뒤 10행만 표시)")
         out += [_format_price_row(*r) for r in shown]
+
+        if filings:
+            out.append(f"\n기간 중 공시 {len(filings)}건:")
+            out += [_format_filing_row(*f) for f in filings[:MAX_PERIOD_FILINGS]]
+            if len(filings) > MAX_PERIOD_FILINGS:
+                out.append(f"  (전체 {len(filings)}건 중 {MAX_PERIOD_FILINGS}건만 표시)")
+        else:
+            # 없다는 사실을 명시해야 모델이 원인을 지어내지 않는다.
+            out.append("\n기간 중 공시 없음 — 등락 원인을 이 데이터로는 설명할 수 없다.")
         return "\n".join(out)
 
 

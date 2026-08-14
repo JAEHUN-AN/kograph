@@ -106,8 +106,8 @@ uv run python scripts/verify_mcp.py                            # 클라이언트
 | `list_companies` | 조회 가능한 종목·섹터 확인 |
 | `get_company_relations` | 공급·지분·보증·모자 관계 (1~2홉) |
 | `find_connection` | 두 회사의 연결 경로·공통 거래처 |
-| `search_filings` | 계약 조건·투자 목적 등 서술형 내용 |
-| `get_price_series` | 일별 시세·기간 수익률 |
+| `search_filings` | 계약 조건·투자 목적 등 서술형 내용 (회사 한정 가능) |
+| `get_price_series` | 일별 시세·기간 수익률 + **같은 기간의 공시** |
 
 **모든 결과에 근거 공시번호가 붙는다.** 금융 도메인에서 출처를 못 대는 답변은
 쓸 수 없다. 도구 설명에는 "무엇을 하는지"가 아니라 **"언제 호출해야 하는지"**를
@@ -164,7 +164,7 @@ INT8 벤치마크(344ms/청크)와 맞물려 **벡터 지연 = 임베딩 비용*
 cp .env.example .env          # DART_API_KEY 발급 후 입력
 docker compose up -d          # Oracle + Neo4j + pgvector + Airflow
 uv sync --extra dev --extra graph --extra rag --extra mcp
-uv run pytest                 # 단위 테스트 70건 (DB 불필요)
+uv run pytest                 # 단위 테스트 72건 (DB 불필요)
 ```
 
 파이프라인 순서:
@@ -196,7 +196,7 @@ uv run python -m kograph.rag.evaluate
 
 코드가 있는 것과 검증된 것은 다르므로 구분해 적는다.
 
-**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 70건), 지식그래프 적재,
+**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 72건), 지식그래프 적재,
 하이브리드 검색 + 30문항 평가, MCP 서버(stdio·HTTP 양쪽 클라이언트 왕복),
 ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측.
 

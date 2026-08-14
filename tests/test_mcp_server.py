@@ -9,6 +9,7 @@ from datetime import date
 import anyio
 
 from kograph.mcp_server.server import (
+    _format_filing_row,
     _format_price_row,
     _relation_sort_key,
     _shared_partners,
@@ -73,6 +74,23 @@ class TestRelationOrdering:
         ordered = [e.text for e in sorted(evidences, key=_relation_sort_key)]
 
         assert ordered[0] == "공급"
+
+
+class TestFormatFilingRow:
+    def test_converts_yyyymmdd_to_iso_date(self):
+        """filing.rcept_dt는 DATE가 아니라 YYYYMMDD 문자열이다."""
+        line = _format_filing_row("20260713", "주요사항보고서(해외증권시장주권등상장)",
+                                  "20260713000324")
+
+        assert "2026-07-13" in line
+        assert "20260713000324" in line
+
+    def test_keeps_report_name_intact(self):
+        """공시명을 자르면 모델이 무슨 공시인지 판단하지 못한다."""
+        line = _format_filing_row("20260729", "연결재무제표기준영업(잠정)실적(공정공시)",
+                                  "20260729800013")
+
+        assert "연결재무제표기준영업(잠정)실적(공정공시)" in line
 
 
 class TestServerMetadata:

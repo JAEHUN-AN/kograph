@@ -43,25 +43,38 @@ class Evidence:
     rel_types: list[str] = field(default_factory=list)
 
 
-def vector_search(question: str, k: int = DEFAULT_K) -> list[Evidence]:
-    """pgvector 코사인 최근접. 임베딩은 적재 때와 동일 모델·정규화를 쓴다."""
+def vector_search(
+    question: str, k: int = DEFAULT_K, company: str | None = None
+) -> list[Evidence]:
+    """pgvector 코사인 최근접. 임베딩은 적재 때와 동일 모델·정규화를 쓴다.
+
+    company를 주면 그 회사의 공시로만 좁힌다. 의미 유사도는 소유권을 구분하지
+    못해서, "SK하이닉스 채무보증"으로 검색하면 같은 그룹 계열사 공시가 섞인다.
+    """
     started = time.perf_counter()
-    results = _vector_search(question, k)
+    results = _vector_search(question, k, company)
     observe_retrieval("vector", time.perf_counter() - started, len(results))
     return results
 
 
-def _vector_search(question: str, k: int) -> list[Evidence]:
+def _vector_search(question: str, k: int, company: str | None = None) -> list[Evidence]:
     qvec = embed_texts([question])[0]
+    # 필터는 반드시 ORDER BY 앞에 온다. 상위 k를 뽑고 거르면 대부분 빈 결과가 된다.
+    where, params = ["embedding IS NOT NULL"], [qvec]
+    if company:
+        where.append("REPLACE(corp_name, ' ', '') ILIKE %s")
+        params.append(f"%{company.replace(' ', '')}%")
+    params += [qvec, k]
+
     with connect_pg() as pg, pg.cursor() as cur:
         cur.execute(
-            """SELECT rcept_no, corp_name, content,
-                      1 - (embedding <=> %s::vector) AS score
-               FROM doc_chunk
-               WHERE embedding IS NOT NULL
-               ORDER BY embedding <=> %s::vector
-               LIMIT %s""",
-            (qvec, qvec, k),
+            f"""SELECT rcept_no, corp_name, content,
+                       1 - (embedding <=> %s::vector) AS score
+                FROM doc_chunk
+                WHERE {" AND ".join(where)}
+                ORDER BY embedding <=> %s::vector
+                LIMIT %s""",
+            tuple(params),
         )
         return [
             Evidence(
