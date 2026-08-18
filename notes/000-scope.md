@@ -16,7 +16,7 @@
 - [ ] W1: 증분 ETL 소요시간 / pandas 대비 Spark 팩터 배치 처리 시간
 - [x] W2: 관계 추출 — 규칙 파서 396/509건(77.8%), 642 트리플, 0.4초, 0원 → [001](001-rule-vs-llm-extraction.md)
 - [x] W2: vanilla RAG vs GraphRAG — 30문항 검색 recall 56% → 98% → [002](002-graphrag-vs-vector-eval.md)
-- [ ] W2: 관계 추출 정밀도 (수동 라벨 200건)
+- [x] W2: 관계 추출 정밀도 — 표본 212건, 재가중 95.0%, 오류의 91%가 정정공시 → [005](005-parser-precision.md)
 - [x] W3: 임베딩 처리량 FP32 1.43 → INT8 2.91 chunks/s (2.03x), 가중치 4배 축소, 검색 품질 동일 → [003](003-onnx-int8-quantization.md)
 - [ ] W3: 쿼리당 LLM 비용·p95 지연 before/after (크레딧 확보 후)
 - [x] W4: 서빙 이미지 8.8GB → 913MB, 메트릭 4종 + 대시보드, CI 3중 검증 → [004](004-serving-deployment.md)
@@ -29,5 +29,5 @@
 - [002](002-graphrag-vs-vector-eval.md): GraphRAG vs vanilla RAG 검색 성능 실측
 - [003](003-onnx-int8-quantization.md): 임베딩 ONNX INT8 양자화 — CPU 처리량 2배, 품질 손실 0
 - [004](004-serving-deployment.md): 서빙 배포와 관측 — 이미지 8.8GB → 913MB
-- 005: (예정) 규칙 파서 vs LLM 정밀도 비교 (수동 라벨 200건)
+- [005](005-parser-precision.md): 규칙 파서 정밀도 — 라벨링 기준과 측정 (표본 212건, 95.0%)
 - ...
