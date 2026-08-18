@@ -38,6 +38,25 @@ MERGE (s)-[r:%s {rcept_no: $rcept_no}]->(o)
 SET r += $props
 """
 
+# 상태 술어는 공시 건수만큼 반복 저장하면 안 된다. '자회사다'는 하나의 사실인데
+# 언급한 공시마다 엣지를 만들면 같은 사실이 수십 개로 불어나, 순회 시 LIMIT을
+# 잡아먹어 진짜 정보(공급·투자)를 밀어낸다. 실제로 에코프로에이치엔의
+# SUBSIDIARY_OF 31개가 SUPPLIES_TO 27개를 밀어내 recall이 떨어졌다.
+# 사건 술어(계약·출자·보증)는 건별로 다른 사실이므로 rcept_no까지 키에 남긴다.
+_STATE_PREDICATES = frozenset({"SUBSIDIARY_OF", "OFFICER_OF", "RELATED_PARTY_OF"})
+
+# 근거는 첫 공시를 남긴다 — 인용이 끊기면 안 된다.
+_MERGE_STATE_RELATION = """
+MERGE (s:Company {name: $subject})
+  SET s.aliases = CASE WHEN $subject_raw IN coalesce(s.aliases, [])
+                       THEN s.aliases ELSE coalesce(s.aliases, []) + $subject_raw END
+MERGE (o:Company {name: $object})
+  SET o.aliases = CASE WHEN $object_raw IN coalesce(o.aliases, [])
+                       THEN o.aliases ELSE coalesce(o.aliases, []) + $object_raw END
+MERGE (s)-[r:%s]->(o)
+  ON CREATE SET r.rcept_no = $rcept_no, r += $props
+"""
+
 
 def load_universe_companies(session) -> int:
     """유니버스 종목을 Company 노드로 선적재 (섹터·종목코드 속성 부여)."""
@@ -74,8 +93,10 @@ def load_triples(session) -> int:
     count = 0
     for subject, predicate, obj, props, rcept_no in rows:
         # predicate는 kg_triple에 Enum 값으로만 저장되므로 안전하게 포맷 가능
+        tmpl = (_MERGE_STATE_RELATION if predicate in _STATE_PREDICATES
+                else _MERGE_RELATION)
         session.run(
-            _MERGE_RELATION % predicate,
+            tmpl % predicate,
             subject=canonical_name(subject), subject_raw=subject,
             object=canonical_name(obj), object_raw=obj,
             rcept_no=rcept_no, props=props,

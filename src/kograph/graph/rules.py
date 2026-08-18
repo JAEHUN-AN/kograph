@@ -143,6 +143,32 @@ def _section_bounds(lines: list[str], label: str) -> tuple[int, int]:
 _SUBSIDIARY_INTRO = ("자회사인", "종속회사인")
 
 
+# 정정공시는 앞부분이 '정정사항' 표(정정항목/정정전/정정후)이고, 그 뒤에
+# 원 보고서 본문이 정정후 값으로 다시 실린다. 표를 그대로 읽으면 라벨 다음
+# 줄이 **정정전** 값이라 낡은 상호·금액을 집는다.
+_CORRECTION_HEAD = "정정신고(보고)"
+
+
+def _body_start(lines: list[str]) -> int:
+    """정정공시면 본문이 시작하는 줄 번호, 아니면 0.
+
+    본문은 '1. 정정관련 공시서류'에 적힌 원 보고서 제목이 **다시 나오는**
+    지점부터다. 구분자로 쓰이는 단독 '-'는 값으로도 쓰여 신뢰할 수 없다.
+    """
+    if not lines or _norm(lines[0]) != _CORRECTION_HEAD:
+        return 0
+    title = _field(lines, "정정관련 공시서류")
+    if not title:
+        return 0
+    seen = 0
+    for i, line in enumerate(lines):
+        if line.strip() == title.strip():
+            seen += 1
+            if seen == 2:
+                return i
+    return 0
+
+
 def _subsidiary_name(lines: list[str]) -> str | None:
     """'자회사인 / <상호> / 의 주요경영사항신고' 머리말에서 자회사 상호를 추출.
 
@@ -345,6 +371,10 @@ def _parse_shareholder_change(filer: str, lines: list[str], report_nm: str) -> l
 
 
 # report_nm 부분일치 -> 파서. 앞쪽 항목이 우선한다.
+# 관계를 만들지 않는 보고서. 노트 005에서 '단일판매ㆍ공급계약해지'가
+# SUPPLIES_TO를 만들고 있던 것이 드러났다 — 처분만 막고 해지를 놓쳤다.
+_NEGATIVE_EVENTS = ("해지", "취소", "처분")
+
 _PARSERS: tuple[tuple[str, Callable[[str, list[str], str], list[Triple]]], ...] = (
     ("공급계약", _parse_supply_contract),
     ("타법인주식", _parse_stake_acquisition),
@@ -359,6 +389,9 @@ def parse(corp_name: str, report_nm: str, doc_text: str) -> list[Triple]:
     if not filer or not doc_text:
         return []
     lines = doc_text.splitlines()
+    # 정정공시는 정정사항 표를 건너뛰고 본문부터 읽는다. 이 한 줄이 없으면
+    # 낡은 상호를 집고(같은 법인이 두 노드로 갈라진다) 자회사 헤더도 놓친다.
+    lines = lines[_body_start(lines):]
 
     triples: list[Triple] = []
     subject = filer
@@ -373,6 +406,11 @@ def parse(corp_name: str, report_nm: str, doc_text: str) -> list[Triple]:
             object=filer,
         ))
         subject = subsidiary
+
+    # 해지·취소·처분은 관계의 성립이 아니라 소멸이다. 폼 파서를 태우면
+    # '계약해지' 공시가 공급 관계를 만든다. 머리말에서 얻은 모자 관계는 남긴다.
+    if any(k in report_nm for k in _NEGATIVE_EVENTS):
+        return triples
 
     for keyword, parser in _PARSERS:
         if keyword in report_nm:
