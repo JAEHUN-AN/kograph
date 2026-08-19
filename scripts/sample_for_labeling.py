@@ -63,7 +63,8 @@ def _evidence(doc_text: str, subject: str, object_name: str,
     return " […] ".join(text[a:b] for a, b in merged), found
 
 
-def _allocation(counts: dict[str, int], target: int) -> dict[str, int]:
+def _allocation(counts: dict[str, int], target: int,
+                min_per_pred: int = MIN_PER_PREDICATE) -> dict[str, int]:
     """층화 배분. 희소 술어에 최소 인원을 보장한다.
 
     비례 배분만 하면 GUARANTEES_DEBT_OF가 12건이라 정밀도 추정이 흔들린다.
@@ -71,7 +72,7 @@ def _allocation(counts: dict[str, int], target: int) -> dict[str, int]:
     """
     total = sum(counts.values())
     return {
-        p: min(n, max(MIN_PER_PREDICATE, round(n * target / total)))
+        p: min(n, max(min_per_pred, round(n * target / total)))
         for p, n in counts.items()
     }
 
@@ -80,12 +81,22 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=int, default=200)
     parser.add_argument("--seed", type=int, default=42)
+    # 재측정용: 특정 보고서 유형만 뽑는다 (예: %기재정정%).
+    # 수정 효과는 오류가 몰렸던 구간에서 확인하는 것이 효율적이다.
+    parser.add_argument("--report-like", default=None)
+    parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--min-per-pred", type=int, default=MIN_PER_PREDICATE)
     args = parser.parse_args()
 
     from kograph.db.oracle import connect
 
     with connect() as conn, conn.cursor() as cur:
-        cur.execute("SELECT predicate, COUNT(*) FROM kg_triple GROUP BY predicate")
+        like = f"%{args.report_like}%" if args.report_like else "%"
+        cur.execute("""
+            SELECT t.predicate, COUNT(*)
+            FROM kg_triple t JOIN filing f ON f.rcept_no = t.rcept_no
+            WHERE f.report_nm LIKE :pat GROUP BY t.predicate
+        """, pat=like)
         counts = dict(cur.fetchall())
 
         cur.execute("""
@@ -93,8 +104,9 @@ def main() -> int:
                    t.object_name, t.props_json,
                    f.corp_name, f.report_nm, f.doc_text
             FROM kg_triple t JOIN filing f ON f.rcept_no = t.rcept_no
+            WHERE f.report_nm LIKE :pat
             ORDER BY t.triple_id
-        """)
+        """, pat=like)
         rows = []
         for tid, rcept, subj, pred, obj, props, corp, report, doc in cur.fetchall():
             rows.append((
@@ -104,7 +116,7 @@ def main() -> int:
                 doc.read() if hasattr(doc, "read") else doc,
             ))
 
-    alloc = _allocation(counts, args.target)
+    alloc = _allocation(counts, args.target, args.min_per_pred)
     by_pred: dict[str, list] = {}
     for r in rows:
         by_pred.setdefault(r[3], []).append(r)
@@ -116,9 +128,9 @@ def main() -> int:
         picked += rng.sample(pool, min(want, len(pool)))
     rng.shuffle(picked)  # 라벨링 중 술어 순서를 보고 추측하지 않도록 섞는다
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     missing = 0
-    with OUT.open("w", encoding="utf-8") as f:
+    with args.out.open("w", encoding="utf-8") as f:
         for i, (tid, rcept, subj, pred, obj, props, corp, report, doc) in enumerate(picked, 1):
             evidence, found = _evidence(doc, subj, obj, corp)
             missing += not found
@@ -141,7 +153,7 @@ def main() -> int:
                 "note": "",
             }, ensure_ascii=False) + "\n")
 
-    print(f"표본 {len(picked)}건 -> {OUT}")
+    print(f"표본 {len(picked)}건 -> {args.out}")
     print(f"{'술어':22}{'모집단':>7}{'표본':>7}{'비율':>8}")
     for pred in sorted(alloc):
         n, k = counts[pred], sum(1 for r in picked if r[3] == pred)

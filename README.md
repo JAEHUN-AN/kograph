@@ -30,7 +30,7 @@
 | 항목 | 값 | 근거 |
 |---|---|---|
 | 관계 추출 | 공시 410/509건(80.5%), 트리플 685개, **0.4초, 비용 0원** | [001](notes/001-rule-vs-llm-extraction.md) |
-| 추출 정밀도 | 수동 라벨 212건, **95.0%** (모집단 재가중) | [005](notes/005-parser-precision.md) |
+| 추출 정밀도 | 수동 라벨 212건 95.0% → 결함 수정 후 **99.6%** (재라벨 61건 오류 0) | [005](notes/005-parser-precision.md) |
 | 검색 recall | vector 56% → **hybrid 100%** | [002](notes/002-graphrag-vs-vector-eval.md) |
 | 임베딩 처리량 | FP32 1.43 → **INT8 2.91 chunks/s**, 가중치 2,166 → **544MB**, 검색 품질 동일 | [003](notes/003-onnx-int8-quantization.md) |
 | 서빙 이미지 | 8.8GB → **913MB** | [004](notes/004-serving-deployment.md) |
@@ -223,7 +223,7 @@ ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측.
 | [002](notes/002-graphrag-vs-vector-eval.md) | GraphRAG vs vanilla RAG 검색 성능 실측 |
 | [003](notes/003-onnx-int8-quantization.md) | ONNX INT8 양자화: 처리량 2배, 품질 손실 0 |
 | [004](notes/004-serving-deployment.md) | 서빙 배포와 관측: 이미지 8.8GB → 913MB |
-| [005](notes/005-parser-precision.md) | 규칙 파서 정밀도 95.0% — 오류의 91%가 정정공시 |
+| [005](notes/005-parser-precision.md) | 규칙 파서 정밀도 95.0% → 99.6% — 오류의 91%가 정정공시였다 |
 
 ## 데이터 출처
 
