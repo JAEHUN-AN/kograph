@@ -18,7 +18,8 @@
 - [x] W2: vanilla RAG vs GraphRAG — 30문항 검색 recall 56% → 100% → [002](002-graphrag-vs-vector-eval.md)
 - [x] W2: 관계 추출 정밀도 — 표본 212건, 재가중 95.0%, 오류의 91%가 정정공시 → [005](005-parser-precision.md)
 - [x] W3: 임베딩 처리량 FP32 1.43 → INT8 2.91 chunks/s (2.03x), 가중치 4배 축소, 검색 품질 동일 → [003](003-onnx-int8-quantization.md)
-- [ ] W3: 쿼리당 LLM 비용·p95 지연 before/after (크레딧 확보 후)
+- ~~W3: 쿼리당 LLM 비용·p95 지연 before/after~~ **취소** — API 크레딧을 추가하지
+  않기로 결정(2026-08-19). LLM 의존 지표는 전부 범위에서 제외한다
 - [x] W4: 서빙 이미지 8.8GB → 913MB, 메트릭 4종 + 대시보드, CI 3중 검증 → [004](004-serving-deployment.md)
 - [ ] W4: 평가셋 회귀를 CI에 추가 (DB 시드 필요)
 
