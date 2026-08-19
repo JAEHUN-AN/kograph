@@ -13,7 +13,7 @@
 
 ## 측정 예정 지표 (각 주차 1개 이상)
 
-- [ ] W1: 증분 ETL 소요시간 / pandas 대비 Spark 팩터 배치 처리 시간
+- [x] W1: 팩터 배치 pandas 0.55s vs Spark 5.92s (10.8배, 결과 동일) → [006](006-spark-vs-pandas.md)
 - [x] W2: 관계 추출 — 규칙 파서 410/509건(80.5%), 685 트리플, 0.4초, 0원 → [001](001-rule-vs-llm-extraction.md)
 - [x] W2: vanilla RAG vs GraphRAG — 30문항 검색 recall 56% → 100% → [002](002-graphrag-vs-vector-eval.md)
 - [x] W2: 관계 추출 정밀도 — 표본 212건, 재가중 95.0%, 오류의 91%가 정정공시 → [005](005-parser-precision.md)
@@ -30,4 +30,5 @@
 - [003](003-onnx-int8-quantization.md): 임베딩 ONNX INT8 양자화 — CPU 처리량 2배, 품질 손실 0
 - [004](004-serving-deployment.md): 서빙 배포와 관측 — 이미지 8.8GB → 913MB
 - [005](005-parser-precision.md): 규칙 파서 정밀도 — 라벨링 기준과 측정 (표본 212건, 95.0%)
+- [006](006-spark-vs-pandas.md): 팩터 배치 — 이 규모에서 Spark는 pandas보다 10.8배 느리다
 - ...

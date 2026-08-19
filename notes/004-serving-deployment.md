@@ -132,8 +132,11 @@ startup probe를 따로 둔 이유와 같은 현상이다. 이 로딩 시간을 
 
 ## 남은 작업
 
-- k3d로 실제 클러스터에 적용해 매니페스트를 런타임 검증 (현재는 kustomize
-  렌더까지만 확인)
+- ~~k3d로 실제 클러스터에 적용해 매니페스트를 런타임 검증~~ **완료**: k3d v5.9.0
+  클러스터에 `kubectl apply -k k8s/` → 파드 2/2 Running, PVC Bound(local-path),
+  port-forward로 `/healthz` 200 + 빌드 마커 확인, `/metrics`에 kograph_ 노출.
+  readOnlyRootFilesystem·비루트(10001)·startup probe가 실제 클러스터에서 동작했다.
+  모델 PVC는 비어 있어도 기동에 문제없다 — 임베딩은 첫 검색에서 지연 로딩된다.
 - 평가셋 회귀를 CI에 추가 — DB가 필요하므로 서비스 컨테이너 + 시드 데이터가
   선행되어야 한다
 - 알림 규칙(오류율, 검색 결과 0건 지속)을 Alertmanager로

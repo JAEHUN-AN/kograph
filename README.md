@@ -34,6 +34,7 @@
 | 검색 recall | vector 56% → **hybrid 100%** | [002](notes/002-graphrag-vs-vector-eval.md) |
 | 임베딩 처리량 | FP32 1.43 → **INT8 2.91 chunks/s**, 가중치 2,166 → **544MB**, 검색 품질 동일 | [003](notes/003-onnx-int8-quantization.md) |
 | 서빙 이미지 | 8.8GB → **913MB** | [004](notes/004-serving-deployment.md) |
+| 팩터 배치 | 이 규모(21k행)에선 **pandas가 Spark의 10.8배 빠름** (결과 동일 검증) | [006](notes/006-spark-vs-pandas.md) |
 
 데이터 규모: 공시 2,192건 · 시세 21,284행 · 벡터 청크 8,934개 ·
 그래프 노드 186/관계 394.
@@ -201,13 +202,13 @@ uv run python -m kograph.rag.evaluate
 
 코드가 있는 것과 검증된 것은 다르므로 구분해 적는다.
 
-**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 72건), 지식그래프 적재,
-하이브리드 검색 + 30문항 평가, MCP 서버(stdio·HTTP 양쪽 클라이언트 왕복),
-ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측.
+**검증됨** — ETL 2개 DAG 실전 실행, 규칙 파서(테스트 72건 + 수동 라벨 273건),
+지식그래프 적재, 하이브리드 검색 + 30문항 평가, MCP 서버(stdio·HTTP 양쪽
+클라이언트 왕복), ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측,
+PySpark 팩터 배치(공식 Spark 컨테이너에서 실행, pandas와 결과 대조),
+k8s 매니페스트(k3d 클러스터 적용 — 파드 2/2 Running, /healthz 200).
 
-**코드만 있고 미검증** — PySpark 팩터 배치(작성만, 미실행), LLM 관계 추출
-(API 크레딧 부족으로 미실행), k8s 매니페스트(kustomize 렌더까지만, 클러스터
-미적용).
+**코드만 있고 미검증** — LLM 관계 추출(API 크레딧 부족으로 미실행).
 
 **알려진 한계** — 파서가 못 읽은 공시 99건의 관계는 그래프에 없고, 어떤
 리트리버도 없는 사실은 찾지 못한다. 평가셋 30문항은 작고 정답을 같은
@@ -224,6 +225,7 @@ ONNX INT8 벤치마크, 컨테이너 + Prometheus 수집 실측.
 | [003](notes/003-onnx-int8-quantization.md) | ONNX INT8 양자화: 처리량 2배, 품질 손실 0 |
 | [004](notes/004-serving-deployment.md) | 서빙 배포와 관측: 이미지 8.8GB → 913MB |
 | [005](notes/005-parser-precision.md) | 규칙 파서 정밀도 95.0% → 99.6% — 오류의 91%가 정정공시였다 |
+| [006](notes/006-spark-vs-pandas.md) | 팩터 배치: 이 규모에서 Spark는 pandas보다 10.8배 느리다 |
 
 ## 데이터 출처
 
