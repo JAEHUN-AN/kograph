@@ -1,5 +1,10 @@
 # kograph
 
+[![CI](https://github.com/JAEHUN-AN/kograph/actions/workflows/ci.yml/badge.svg)](https://github.com/JAEHUN-AN/kograph/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.12%2B-blue)
+![MCP](https://img.shields.io/badge/MCP-SDK%202.0-8A2BE2)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 > 한국 주식시장 공시로 지식그래프를 만들고, LLM이 MCP 도구로 직접 조회하는
 > 금융 리서치 백엔드.
 
@@ -87,16 +92,20 @@ ONNX FP32는 torch보다 11% 느렸다(1.27 vs 1.43 chunks/s). 이득은 전부
 
 ## 아키텍처
 
-```
-DART OpenAPI ─┐
-              ├─ Airflow ─→ Oracle 23ai ─┬─→ 규칙 파서 ─→ Neo4j (그래프)
-pykrx (KRX) ──┘   (증분 ETL)  (원천)      └─→ 청킹+임베딩 ─→ pgvector
-                                                    │
-                                    하이브리드 리트리버 (벡터 + 그래프 순회)
-                                                    │
-                                          MCP 서버 (stdio / HTTP)
-                                                    │
-                                    Claude Desktop        Prometheus ─ Grafana
+```mermaid
+flowchart TB
+    DART["DART OpenAPI<br/>(전자공시)"] --> AF["Airflow<br/>증분 ETL"]
+    KRX["pykrx<br/>(KRX 시세)"] --> AF
+    AF --> ORA[("Oracle 23ai<br/>원천 저장소")]
+    ORA --> RULES["규칙 파서<br/>관계 추출 · 정밀도 99.6%"]
+    ORA --> EMB["청킹 + bge-m3 임베딩<br/>ONNX INT8 · CPU"]
+    RULES --> NEO[("Neo4j<br/>지식그래프")]
+    EMB --> PG[("pgvector")]
+    NEO --> RET["하이브리드 리트리버<br/>벡터 + 그래프 순회 · recall 100%"]
+    PG --> RET
+    RET --> MCP["MCP 서버<br/>stdio / streamable-http"]
+    MCP --> CD["Claude Desktop"]
+    MCP --> PROM["Prometheus"] --> GRAF["Grafana"]
 ```
 
 ## MCP 서버
